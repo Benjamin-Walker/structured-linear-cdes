@@ -23,10 +23,7 @@ class LinearCDE(nn.Module):
         self.init_matrix = nn.Parameter(torch.randn(hidden_dim, data_dim))
         self.init_bias = nn.Parameter(torch.randn(hidden_dim))
 
-        self.vf_A = [
-            nn.Linear(hidden_dim, omega_dim, bias=False) for _ in range(hidden_dim)
-        ]
-
+        self.vf_A = nn.Linear(hidden_dim, hidden_dim * omega_dim)
         self.vf_B = nn.Parameter(torch.randn(hidden_dim, xi_dim))
 
     def forward(self, X):
@@ -42,7 +39,8 @@ class LinearCDE(nn.Module):
         )  # Batch matrix multiplication
 
         def func(y):
-            vf_A = torch.stack([vf(y) for vf in self.vf_A], dim=1)
+            vf_A = self.vf_A(y)  # Resulting shape: (batch_size, hidden_dim * omega_dim)
+            vf_A = vf_A.view(-1, self.hidden_dim, self.omega_dim)
             return torch.cat(
                 (vf_A, self.vf_B.unsqueeze(0).repeat(batch_size, 1, 1)), dim=-1
             )
