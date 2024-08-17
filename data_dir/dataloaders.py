@@ -13,8 +13,8 @@ class A5Dataset(Dataset):
         target_array = df["target"].str.split(" ", expand=True).astype(int).to_numpy()
 
         # Store data as torch tensors
-        self.data = torch.tensor(input_array, dtype=torch.float32)
-        self.labels = torch.tensor(target_array, dtype=torch.float32)
+        self.data = torch.tensor(input_array, dtype=torch.long)
+        self.labels = torch.tensor(target_array, dtype=torch.long)
 
     def __len__(self):
         return len(self.data)
