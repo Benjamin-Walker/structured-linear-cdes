@@ -82,7 +82,7 @@ if __name__ == "__main__":
     data_dim = 255
     omega_dim = data_dim + 1
     xi_dim = data_dim + 1
-    length = 3
+    length = 20
 
     model = A5LinearCDE(hidden_dim, data_dim, omega_dim, xi_dim, label_dim)
 
@@ -100,6 +100,6 @@ if __name__ == "__main__":
         dataloader_length2,
         dataloader,
         num_steps=1000000,
-        print_steps=1000,
+        print_steps=10000,
         learning_rate=3e-4,
     )
