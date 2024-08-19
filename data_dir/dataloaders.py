@@ -23,7 +23,9 @@ class A5Dataset(Dataset):
         return self.data[idx], self.labels[idx]
 
 
-def create_a5_dataloaders(length, train_split=0.8, batch_size=32, shuffle=True):
+def create_a5_dataloaders(
+    length, train_split=0.8, batch_size=32, seed=1234, shuffle=True
+):
     # Initialize the dataset
     dataset = A5Dataset(length)
 
@@ -33,7 +35,11 @@ def create_a5_dataloaders(length, train_split=0.8, batch_size=32, shuffle=True):
         train_size = int(train_split * len(dataset))
         test_size = len(dataset) - train_size
 
-        train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
+        train_dataset, test_dataset = random_split(
+            dataset,
+            [train_size, test_size],
+            generator=torch.Generator().manual_seed(seed),
+        )
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle)
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=shuffle)
     else:
