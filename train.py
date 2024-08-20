@@ -96,7 +96,7 @@ if __name__ == "__main__":
         2, train_split=1.0, batch_size=batch_size // 10
     )
 
-    # Dataloder for simultaneous training on two lengths
+    # Dataloader for simultaneous training on two lengths
     def train_dataloader_multilength():
         while True:
             for (X, y), (X_2, y_2) in zip(train_dataloader, dataloader_length2):
