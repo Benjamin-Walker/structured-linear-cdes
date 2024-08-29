@@ -1,4 +1,3 @@
-import os
 import time
 
 import torch
@@ -75,9 +74,6 @@ def train_model(model, dataloader, num_steps, print_steps, learning_rate, device
 
 
 if __name__ == "__main__":
-    if not os.path.isdir("outputs"):
-        os.mkdir("outputs")
-
     hidden_dim = 110
     label_dim = 60
     batch_size = 128

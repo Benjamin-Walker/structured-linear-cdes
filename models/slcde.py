@@ -36,15 +36,16 @@ class LinearCDE(nn.Module):
         # Initialise the hidden state
         x0 = X[:, 0, :]
         y0 = self.init_layer(x0)
-
-        ys = [y0]
+        ys = torch.zeros(batch_size, seq_len, self.hidden_dim, device=X.device)
+        ys[:, 0] = y0
         y = y0
+
         # Recurrently calculate the hidden states
         for i in range(1, X.shape[1]):
             A = self.vf_A(y).view(-1, self.hidden_dim, self.data_dim + 1)
             y = y + torch.einsum("bij,bj->bi", A, inp[:, i]) + self.vf_B(inp[:, i])
-            ys.append(y)
-        ys = torch.stack(ys, dim=1)
+            ys[:, i] = y
+
         return ys
 
 
@@ -61,8 +62,8 @@ class A5LinearCDE(nn.Module):
 
     def forward(self, X):
         # Apply embedding, CDE, normalization, dropout, and final linear layer
-        X = torch.stack([self.embedding(x) for x in X])
+        X = self.embedding(X)
         ys = self.LCDE(X)
-        ys = torch.stack([self.norm(y) for y in ys])
+        ys = self.norm(ys)
         ys = self.drop(ys)
-        return torch.stack([self.linear(y) for y in ys])
+        return self.linear(ys)
