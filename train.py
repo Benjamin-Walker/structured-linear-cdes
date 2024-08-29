@@ -65,10 +65,10 @@ def train_model(model, dataloader, num_steps, print_steps, learning_rate, device
                 total_loss = 0
                 model.train()
 
-            step += 1
-
             if step >= num_steps:
                 break
+
+            step += 1
 
     return model, steps, test_accs
 

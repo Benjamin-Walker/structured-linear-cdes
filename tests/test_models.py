@@ -62,8 +62,8 @@ def test_a5linearcde_forward():
     assert output.shape == (batch_size, seq_len, label_dim)
 
 
-# Check if linearcde gives the depth-1 signature for the right initialisation
-def test_increment_linearcdee():
+# Check if linearcde gives the increment for the right initialisation
+def test_increment_linearcde():
     hidden_dim = 3
     data_dim = 1
 

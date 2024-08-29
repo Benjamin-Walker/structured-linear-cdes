@@ -50,13 +50,13 @@ class LinearCDE(nn.Module):
 
 
 class A5LinearCDE(nn.Module):
-    def __init__(self, hidden_dim, data_dim, label_dim, init_std=1.0):
+    def __init__(self, hidden_dim, data_dim, label_dim, init_std=1.0, dropout_rate=0.1):
         super(A5LinearCDE, self).__init__()
         # Define components: embedding, CDE, normalization, dropout, linear
         self.embedding = Embedding(label_dim, data_dim)
         self.LCDE = LinearCDE(hidden_dim, data_dim, init_std=init_std)
         self.norm = nn.LayerNorm(hidden_dim)
-        self.drop = nn.Dropout(p=0.1)
+        self.drop = nn.Dropout(p=dropout_rate)
         self.linear = nn.Linear(hidden_dim, label_dim)
         self.label_dim = label_dim
 
