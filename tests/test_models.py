@@ -124,3 +124,71 @@ def test_a5linearcde_dropout():
     assert torch.equal(output_no_dropout, output_no_dropout_again)
     # Check that the model is stochastic with dropout turned on
     assert not torch.equal(output_with_dropout, output_with_dropout_again)
+
+
+# Test to check the effect of init_std on weight initialization in LinearCDE
+def test_linearcde_init_std():
+    torch.manual_seed(1234)
+    hidden_dim = 40
+    data_dim = 20
+    init_std = 0.5
+
+    init_layer_weight_stds = []
+    init_layer_bias_stds = []
+    vf_B_weight_stds = []
+    vf_A_stds = []
+
+    for _ in range(1000):
+        linear_cde = LinearCDE(hidden_dim, data_dim, init_std=init_std)
+        init_layer_weight_stds.append(linear_cde.init_layer.weight.std().item())
+        init_layer_bias_stds.append(linear_cde.init_layer.bias.std().item())
+        vf_B_weight_stds.append(linear_cde.vf_B.weight.std().item())
+        vf_A_stds.append(linear_cde.vf_A.weight.std().item())
+
+    assert torch.isclose(
+        torch.tensor(init_layer_weight_stds).mean(), torch.tensor(init_std), atol=0.01
+    )
+    assert torch.isclose(
+        torch.tensor(init_layer_bias_stds).mean(), torch.tensor(init_std), atol=0.01
+    )
+    assert torch.isclose(
+        torch.tensor(vf_B_weight_stds).mean(), torch.tensor(init_std), atol=0.01
+    )
+    assert torch.isclose(
+        torch.tensor(vf_A_stds).mean(),
+        torch.tensor(init_std / (hidden_dim**0.5)),
+        atol=0.01,
+    )
+
+
+# Test to check the effect of sparsity on mask generation in LinearCDE
+def test_linearcde_sparsity():
+    torch.manual_seed(1234)
+    hidden_dim = 40
+    data_dim = 20
+
+    # Test with different levels of sparsity
+    for sparsity in [0.0, 0.5, 1.0]:
+        # Check the sparsity level of the mask
+        if sparsity == 0.0:
+            linear_cde = LinearCDE(hidden_dim, data_dim, sparsity=sparsity)
+            mask = linear_cde.mask
+            # Expecting all zeros
+            assert torch.equal(mask, torch.zeros_like(mask, dtype=torch.bool))
+        elif sparsity == 1.0:
+            linear_cde = LinearCDE(hidden_dim, data_dim, sparsity=sparsity)
+            mask = linear_cde.mask
+            # Expecting all ones
+            assert torch.equal(mask, torch.ones_like(mask, dtype=torch.bool))
+        else:
+            sparsities = []
+            for _ in range(1000):
+                linear_cde = LinearCDE(hidden_dim, data_dim, sparsity)
+                mask = linear_cde.mask
+                sparsities.append(1.0 - mask.float().mean().item())
+            # Expecting the average sparsity level to be close to the target sparsity
+            assert torch.isclose(
+                torch.tensor(sparsities).mean(),
+                torch.tensor(sparsity),
+                atol=0.01,
+            )
