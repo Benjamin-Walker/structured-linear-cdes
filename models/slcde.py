@@ -20,7 +20,7 @@ class LinearCDE(nn.Module):
         self.data_dim = data_dim
         # Define linear layers
         self.init_layer = nn.Linear(data_dim, hidden_dim, bias=True)
-        self.vf_A = nn.Linear(hidden_dim, hidden_dim * (data_dim + 1), bias=False)
+        self.vf_A = nn.Linear(data_dim + 1, hidden_dim * hidden_dim, bias=False)
         self.vf_B = nn.Linear(data_dim + 1, hidden_dim, bias=False)
         # Apply custom weight initialization
         nn.init.normal_(self.init_layer.weight, mean=0.0, std=init_std)
@@ -35,8 +35,7 @@ class LinearCDE(nn.Module):
 
     def _sparse_mask(self, sparsity):
         mask = (
-            torch.rand((self.data_dim + 1) * self.hidden_dim, self.hidden_dim)
-            < sparsity
+            torch.rand(self.hidden_dim * self.hidden_dim, self.data_dim + 1) < sparsity
         )
         return mask
 
@@ -55,10 +54,12 @@ class LinearCDE(nn.Module):
         ys[:, 0] = y0
         y = y0
 
+        Bs = self.vf_B(inp[:, 1:])
+
         # Recurrently calculate the hidden states
         for i in range(1, X.shape[1]):
-            A = self.vf_A(y).view(-1, self.hidden_dim, self.data_dim + 1)
-            y = y + torch.einsum("bij,bj->bi", A, inp[:, i]) + self.vf_B(inp[:, i])
+            A = self.vf_A(inp[:, i]).view(-1, self.hidden_dim, self.hidden_dim)
+            y = y + torch.einsum("bij,bj->bi", A, y) + Bs[:, i - 1]
             ys[:, i] = y
 
         return ys
