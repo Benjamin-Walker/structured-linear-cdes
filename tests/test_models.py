@@ -75,22 +75,22 @@ def test_increment_linearcde():
         bias_init[0] = 1
         linear_cde.init_layer.bias = torch.nn.Parameter(bias_init)
 
-        vf_A = torch.zeros(hidden_dim * (data_dim + 1), hidden_dim)
-        vf_A[2, 0] = 1
-        vf_A[5, 0] = 1
+        vf_A = torch.zeros(hidden_dim * hidden_dim, data_dim + 1)
+        vf_A[3, 0] = 1
+        vf_A[6, 1] = 1
         linear_cde.vf_A.weight = torch.nn.Parameter(vf_A)
 
     X = torch.Tensor([[[0], [1.5], [-1.5]]])
 
     output = linear_cde(X)
 
-    # Linear CDE with the given initialisation should give the depth-1 signature of the
+    # Linear CDE with the given initialisation should give the increment of the
     # two dimensional path with the first dimension as time from 0 to 1 and the second
     # dimension as cumulative sum of the input
     assert (output == torch.Tensor([[[1, 0, 0], [1, 0.5, 1.5], [1, 1.0, 0.0]]])).all()
 
 
-# Additional test to check dropout behavior
+# Test to check dropout behavior
 def test_a5linearcde_dropout():
     batch_size = 2
     seq_len = 3
