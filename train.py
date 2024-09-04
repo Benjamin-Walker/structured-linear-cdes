@@ -36,6 +36,7 @@ def train_model(model, dataloader, num_steps, print_steps, learning_rate, device
             outputs = model(X)
             loss = criterion(outputs.permute(0, 2, 1), y)
             loss.backward()
+            model.mask_grads()
             optimizer.step()
             total_loss += loss.item()
 
@@ -83,7 +84,9 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Standard deviation of 1 / length seems to improve convergence speed
-    model = A5LinearCDE(hidden_dim, data_dim, label_dim, init_std=1.0 / length)
+    model = A5LinearCDE(
+        hidden_dim, data_dim, label_dim, init_std=1.0 / length, sparsity=0.01
+    )
 
     train_dataloader, test_dataloader = create_a5_dataloaders(
         length, train_split=0.8, batch_size=batch_size
@@ -103,7 +106,7 @@ if __name__ == "__main__":
     model, steps, test_accs = train_model(
         model,
         dataloader,
-        num_steps=1000000,
+        num_steps=20000,
         print_steps=1000,
         learning_rate=3e-4,
         device=device,
