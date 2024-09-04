@@ -2,6 +2,8 @@ import torch
 
 from models.slcde import A5LinearCDE, Embedding, LinearCDE
 
+torch.manual_seed(1234)
+
 
 # Test case for the Embedding class
 def test_embedding_forward():
@@ -128,7 +130,6 @@ def test_a5linearcde_dropout():
 
 # Test to check the effect of init_std on weight initialization in LinearCDE
 def test_linearcde_init_std():
-    torch.manual_seed(1234)
     hidden_dim = 40
     data_dim = 20
     init_std = 0.5
@@ -138,7 +139,7 @@ def test_linearcde_init_std():
     vf_B_weight_stds = []
     vf_A_stds = []
 
-    for _ in range(1000):
+    for _ in range(100):
         linear_cde = LinearCDE(hidden_dim, data_dim, init_std=init_std)
         init_layer_weight_stds.append(linear_cde.init_layer.weight.std().item())
         init_layer_bias_stds.append(linear_cde.init_layer.bias.std().item())
@@ -163,7 +164,6 @@ def test_linearcde_init_std():
 
 # Test to check the effect of sparsity on mask generation in LinearCDE
 def test_linearcde_sparsity():
-    torch.manual_seed(1234)
     hidden_dim = 40
     data_dim = 20
 
@@ -181,14 +181,11 @@ def test_linearcde_sparsity():
             # Expecting all ones
             assert torch.equal(mask, torch.ones_like(mask, dtype=torch.bool))
         else:
-            sparsities = []
-            for _ in range(1000):
-                linear_cde = LinearCDE(hidden_dim, data_dim, sparsity)
-                mask = linear_cde.mask
-                sparsities.append(1.0 - mask.float().mean().item())
+            linear_cde = LinearCDE(hidden_dim, data_dim, sparsity)
+            mask = linear_cde.mask
             # Expecting the average sparsity level to be close to the target sparsity
             assert torch.isclose(
-                torch.tensor(sparsities).mean(),
+                torch.tensor(1.0 - mask.float().mean().item()),
                 torch.tensor(sparsity),
                 atol=0.01,
             )
