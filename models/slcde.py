@@ -1,27 +1,20 @@
 import torch
 import torch.nn as nn
 
-
-class Embedding(nn.Module):
-    def __init__(self, num_embeddings: int, embedding_dim: int):
-        super(Embedding, self).__init__()
-        # Create embedding weights
-        self.weights = nn.Parameter(torch.randn(num_embeddings, embedding_dim))
-
-    def forward(self, x):
-        # Retrieve embeddings by index
-        return self.weights[x]
+from models.embedding import Embedding
 
 
 class LinearCDE(nn.Module):
-    def __init__(self, hidden_dim, data_dim, sparsity=1.0, init_std=1.0):
+    def __init__(self, input_dim, hidden_dim, output_dim, sparsity=1.0, init_std=1.0):
         super(LinearCDE, self).__init__()
+        self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.data_dim = data_dim
+        self.output_dim = output_dim
         # Define linear layers
-        self.init_layer = nn.Linear(data_dim, hidden_dim, bias=True)
-        self.vf_A = nn.Linear(data_dim + 1, hidden_dim * hidden_dim, bias=False)
-        self.vf_B = nn.Linear(data_dim + 1, hidden_dim, bias=False)
+        self.init_layer = nn.Linear(input_dim, hidden_dim, bias=True)
+        self.vf_A = nn.Linear(input_dim + 1, hidden_dim * hidden_dim, bias=False)
+        self.vf_B = nn.Linear(input_dim + 1, hidden_dim, bias=False)
+        self.linear = nn.Linear(hidden_dim, output_dim, bias=True)
         # Apply custom weight initialization
         nn.init.normal_(self.init_layer.weight, mean=0.0, std=init_std)
         nn.init.normal_(self.init_layer.bias, mean=0.0, std=init_std)
@@ -35,8 +28,13 @@ class LinearCDE(nn.Module):
 
     def _sparse_mask(self, sparsity):
         mask = (
-            torch.rand(self.hidden_dim * self.hidden_dim, self.data_dim + 1) < sparsity
+            torch.rand(self.hidden_dim * self.hidden_dim, self.input_dim + 1) < sparsity
         )
+        return mask
+
+    def _diag_mask(self):
+        mask = torch.eye(self.hidden_dim, self.hidden_dim).view(-1)
+        mask = mask.repeat(self.input_dim + 1, 1).T
         return mask
 
     def mask_grads(self):
@@ -62,37 +60,65 @@ class LinearCDE(nn.Module):
             y = y + torch.einsum("bij,bj->bi", A, y) + Bs[:, i - 1]
             ys[:, i] = y
 
-        return ys
+        return self.linear(ys)
 
 
-class A5LinearCDE(nn.Module):
+class LinearCDEBlock(nn.Module):
     def __init__(
-        self,
-        hidden_dim,
-        data_dim,
-        label_dim,
-        init_std=1.0,
-        sparsity=1.0,
-        dropout_rate=0.1,
+        self, input_dim, hidden_dim, init_std=1.0, sparsity=1.0, dropout_rate=0.1
     ):
-        super(A5LinearCDE, self).__init__()
-        # Define components: embedding, CDE, normalization, dropout, linear
-        self.embedding = Embedding(label_dim, data_dim)
+        super(LinearCDEBlock, self).__init__()
         self.LCDE = LinearCDE(
-            hidden_dim, data_dim, init_std=init_std, sparsity=sparsity
+            input_dim, hidden_dim, input_dim, init_std=init_std, sparsity=sparsity
         )
-        self.norm = nn.LayerNorm(hidden_dim)
+        self.norm = nn.LayerNorm(input_dim)
         self.drop = nn.Dropout(p=dropout_rate)
-        self.linear = nn.Linear(hidden_dim, label_dim)
-        self.label_dim = label_dim
 
     def mask_grads(self):
         self.LCDE.mask_grads()
 
     def forward(self, X):
-        # Apply embedding, CDE, normalization, dropout, and final linear layer
+        # Apply LinearCDE and add skip connection
+        norm_X = self.norm(X)
+        ys = self.LCDE(norm_X)
+        ys = ys + X  # Skip connection
+        ys = self.drop(ys)  # Dropout
+        return ys
+
+
+class StackedLCDE(nn.Module):
+    def __init__(
+        self,
+        num_blocks,
+        hidden_dim,
+        data_dim,
+        embedding_dim,
+        label_dim,
+        init_std=1.0,
+        sparsity=1.0,
+        dropout_rate=0.1,
+    ):
+        super(StackedLCDE, self).__init__()
+        self.embedding = Embedding(data_dim, embedding_dim)
+        self.blocks = nn.ModuleList(
+            [
+                LinearCDEBlock(
+                    embedding_dim, hidden_dim, init_std, sparsity, dropout_rate
+                )
+                for _ in range(num_blocks)
+            ]
+        )
+        self.linear = nn.Linear(embedding_dim, label_dim)
+
+    def mask_grads(self):
+        for block in self.blocks:
+            block.mask_grads()
+
+    def forward(self, X):
+        # Apply embedding layer
         X = self.embedding(X)
-        ys = self.LCDE(X)
-        ys = self.norm(ys)
-        ys = self.drop(ys)
-        return self.linear(ys)
+        # Pass through each block
+        for block in self.blocks:
+            X = block(X)
+        # Final linear layer
+        return self.linear(X)

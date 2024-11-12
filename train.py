@@ -5,12 +5,13 @@ import torch.nn as nn
 import torch.optim as optim
 
 from data_dir.dataloaders import create_a5_dataloaders
-from models.slcde import A5LinearCDE
+from models.mamba import StackedMamba
+from models.slcde import StackedLCDE
 
 
 def train_model(model, dataloader, num_steps, print_steps, learning_rate, device):
     model.to(device)
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
 
     step = 0
@@ -75,18 +76,24 @@ def train_model(model, dataloader, num_steps, print_steps, learning_rate, device
 
 
 if __name__ == "__main__":
-    hidden_dim = 110
-    label_dim = 60
-    batch_size = 128
-    data_dim = 255
+    model_name = "mamba"
     length = 20
+    data_dim = 60
+    label_dim = 60
+    batch_size = 32
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Standard deviation of 1 / length seems to improve convergence speed
-    model = A5LinearCDE(
-        hidden_dim, data_dim, label_dim, init_std=1.0 / length, sparsity=0.01
-    )
+    if model_name == "mamba":
+        model_dim = 512
+        model = StackedMamba(4, model_dim, data_dim, label_dim)
+    elif model_name == "lcde":
+        model_dim = 128
+        model = StackedLCDE(
+            1, model_dim, data_dim, model_dim, label_dim, init_std=1 / 20
+        )
+    else:
+        raise ValueError("Model not recognized")
 
     train_dataloader, test_dataloader = create_a5_dataloaders(
         length, train_split=0.8, batch_size=batch_size
@@ -106,8 +113,8 @@ if __name__ == "__main__":
     model, steps, test_accs = train_model(
         model,
         dataloader,
-        num_steps=20000,
+        num_steps=1000000,
         print_steps=1000,
-        learning_rate=3e-4,
+        learning_rate=1e-4,
         device=device,
     )
