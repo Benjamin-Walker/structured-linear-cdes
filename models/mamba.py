@@ -46,8 +46,7 @@ class MambaBlock(nn.Module):
         Forward pass of the MambaBlock.
 
         Args:
-            x (torch.Tensor): Input tensor of shape
-                              (batch_size, seq_len, model_dim).
+            x (torch.Tensor): Input tensor of shape (batch_size, seq_len, model_dim).
 
         Returns:
             torch.Tensor: Output tensor of the same shape (batch_size, seq_len, model_dim).
@@ -118,9 +117,7 @@ class StackedMamba(nn.Module):
 
     def mask_grads(self):
         """
-        This method is included for consistency and future-proofing.
-        In advanced use cases, you may wish to mask or freeze certain
-        gradients here. Currently, it does not modify the gradients.
+        This method is included for consistency with other models.
         """
         pass
 
