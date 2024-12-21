@@ -54,7 +54,10 @@ def train_model(model, dataloader, num_steps, print_steps, learning_rate, device
                         test_num += y.size(0) * y.size(1)
 
                 if step == 0:
+                    # If step == 0, we've effectively only done 1 iteration so far
+                    # but we scale total_loss as if we had print_steps iters
                     total_loss *= print_steps
+
                 print(
                     f"Step: {step}, "
                     f"Loss: {total_loss / print_steps:.4f}, "
@@ -102,7 +105,6 @@ if __name__ == "__main__":
         2, train_split=1.0, batch_size=batch_size // 10
     )
 
-    # Dataloader for simultaneous training on two lengths
     def train_dataloader_multilength():
         while True:
             for (X, y), (X_2, y_2) in zip(train_dataloader, dataloader_length2):

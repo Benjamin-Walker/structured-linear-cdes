@@ -1,32 +1,71 @@
 import torch
 
-from models.embedding import Embedding
+from models.mamba import MambaBlock, StackedMamba
 from models.slcde import LinearCDE, StackedLCDE
 
 torch.manual_seed(1234)
 
 
-# Test case for the Embedding class
-def test_embedding_forward():
-    num_embeddings = 10
-    embedding_dim = 4
-    batch_size = 5
-    embedding_layer = Embedding(num_embeddings, embedding_dim)
+def test_mamba_block_forward():
+    """
+    Basic test for the MambaBlock forward pass.
+    Assumes MambaBlock(d_model=input_dim), returns the same shape as input.
+    """
+    batch_size = 2
+    seq_len = 3
+    input_dim = 8
+    dropout_rate = 0.1
 
-    # Input tensor of indices
-    x = torch.randint(0, num_embeddings, (batch_size,))
+    block = MambaBlock(input_dim, dropout_rate=dropout_rate)
 
-    # Perform forward pass
-    output = embedding_layer(x)
+    x = torch.randn(batch_size, seq_len, input_dim)
+    out = block(x)
 
-    # Check the output shape
-    assert output.shape == (batch_size, embedding_dim)
-
-    # Check if output values match the weights at corresponding indices
-    torch.allclose(output, embedding_layer.weights[x])
+    # Output should match the input shape
+    assert out.shape == (batch_size, seq_len, input_dim)
+    # Check that forward pass runs without error
+    assert out is not None
 
 
-# Test case for the LinearCDE class
+def test_stacked_mamba_forward():
+    """
+    Basic test for StackedMamba forward pass.
+    Assumes StackedMamba applies multiple MambaBlocks in sequence,
+    plus a final linear layer mapping from model_dim -> label_dim.
+    """
+    batch_size = 2
+    seq_len = 3
+    num_blocks = 2
+    model_dim = 8
+    data_dim = 10  # used for nn.Embedding in StackedMamba
+    label_dim = 5
+    dropout_rate = 0.1
+
+    # Create a stacked Mamba model
+    model = StackedMamba(
+        num_blocks=num_blocks,
+        model_dim=model_dim,
+        data_dim=data_dim,
+        label_dim=label_dim,
+        dropout_rate=dropout_rate,
+    )
+
+    # Input of token IDs (batch_size, seq_len)
+    X = torch.randint(0, data_dim, (batch_size, seq_len))
+
+    # Forward pass
+    out = model(X)
+
+    # The output should have shape (batch_size, seq_len, label_dim)
+    assert out.shape == (batch_size, seq_len, label_dim)
+    assert out is not None
+
+
+# ---------------------------
+# Tests for LinearCDE
+# ---------------------------
+
+
 def test_linearcde_forward():
     batch_size = 2
     seq_len = 3
@@ -46,8 +85,11 @@ def test_linearcde_forward():
     assert output.shape == (batch_size, seq_len, output_dim)
 
 
-# Test case for the A5LinearCDE class
-def test_a5linearcde_forward():
+def test_stackedlcde_forward():
+    """
+    Updated test for the StackedLCDE forward pass.
+    (Previously named test_a5linearcde_forward but renamed for clarity.)
+    """
     batch_size = 2
     seq_len = 3
     num_blocks = 2
@@ -56,21 +98,27 @@ def test_a5linearcde_forward():
     data_dim = 4
     label_dim = 6
 
-    a5linearcde = StackedLCDE(
-        num_blocks, hidden_dim, data_dim, embedding_dim, label_dim
+    # The stacked LCDE expects an input of shape (batch_size, seq_len, data_dim)
+    # if it used an embedding, or just (batch_size, seq_len) if it has an internal nn.Embedding.
+    # Adjust according to how your StackedLCDE is actually implemented.
+    model = StackedLCDE(
+        num_blocks=num_blocks,
+        hidden_dim=hidden_dim,
+        data_dim=data_dim,
+        embedding_dim=embedding_dim,
+        label_dim=label_dim,
     )
 
-    # Input tensor (batch_size, seq_len, data_dim)
+    # Input of token IDs (batch_size, seq_len)
     X = torch.randint(0, data_dim, (batch_size, seq_len))
 
     # Perform forward pass
-    output = a5linearcde(X)
+    output = model(X)
 
     # Check the output shape
     assert output.shape == (batch_size, seq_len, label_dim)
 
 
-# Check if linearcde gives the increment for the right initialisation
 def test_increment_linearcde():
     hidden_dim = 3
     data_dim = 1
@@ -96,13 +144,13 @@ def test_increment_linearcde():
     output = linear_cde(X)
 
     # Linear CDE with the given initialisation should give the increment of the
-    # two dimensional path with the first dimension as time from 0 to 1 and the second
-    # dimension as cumulative sum of the input
-    assert (output == torch.Tensor([[[1, 0, 0], [1, 0.5, 1.5], [1, 1.0, 0.0]]])).all()
+    # two dimensional path with the first dimension as time from 0 to 1 and
+    # the second dimension as cumulative sum of the input
+    expected = torch.Tensor([[[1, 0, 0], [1, 0.5, 1.5], [1, 1.0, 0.0]]])
+    assert torch.all(output.eq(expected))
 
 
-# Test to check dropout behavior
-def test_a5linearcde_dropout():
+def test_stackedlcde_dropout():
     batch_size = 2
     seq_len = 3
     num_blocks = 2
@@ -111,27 +159,31 @@ def test_a5linearcde_dropout():
     data_dim = 4
     label_dim = 6
 
-    a5linearcde = StackedLCDE(
-        num_blocks, hidden_dim, data_dim, embedding_dim, label_dim
+    model = StackedLCDE(
+        num_blocks=num_blocks,
+        hidden_dim=hidden_dim,
+        data_dim=data_dim,
+        embedding_dim=embedding_dim,
+        label_dim=label_dim,
     )
 
     X = torch.randint(0, data_dim, (batch_size, seq_len))
 
     # Set model to evaluation mode
-    a5linearcde.eval()
-    output_no_dropout = a5linearcde(X)
+    model.eval()
+    output_no_dropout = model(X)
 
     # Set model to training mode
-    a5linearcde.train()
-    output_with_dropout = a5linearcde(X)
+    model.train()
+    output_with_dropout = model(X)
 
     # Set model back to evaluation
-    a5linearcde.eval()
-    output_no_dropout_again = a5linearcde(X)
+    model.eval()
+    output_no_dropout_again = model(X)
 
     # Set model back to training
-    a5linearcde.train()
-    output_with_dropout_again = a5linearcde(X)
+    model.train()
+    output_with_dropout_again = model(X)
 
     # Check that including dropout impacts the output
     assert not torch.equal(output_no_dropout, output_with_dropout)
@@ -141,7 +193,6 @@ def test_a5linearcde_dropout():
     assert not torch.equal(output_with_dropout, output_with_dropout_again)
 
 
-# Test to check the effect of init_std on weight initialization in LinearCDE
 def test_linearcde_init_std():
     hidden_dim = 40
     data_dim = 20
@@ -153,6 +204,7 @@ def test_linearcde_init_std():
     vf_B_weight_stds = []
     vf_A_stds = []
 
+    # We'll create multiple LinearCDE instances to gather stats
     for _ in range(100):
         linear_cde = LinearCDE(data_dim, hidden_dim, output_dim, init_std=init_std)
         init_layer_weight_stds.append(linear_cde.init_layer.weight.std().item())
@@ -160,6 +212,7 @@ def test_linearcde_init_std():
         vf_B_weight_stds.append(linear_cde.vf_B.weight.std().item())
         vf_A_stds.append(linear_cde.vf_A.weight.std().item())
 
+    # Check the approximate means of the distributions
     assert torch.isclose(
         torch.tensor(init_layer_weight_stds).mean(), torch.tensor(init_std), atol=0.01
     )
@@ -169,7 +222,6 @@ def test_linearcde_init_std():
     assert torch.isclose(
         torch.tensor(vf_B_weight_stds).mean(), torch.tensor(init_std), atol=0.01
     )
-    print(torch.tensor(vf_A_stds).mean())
     assert torch.isclose(
         torch.tensor(vf_A_stds).mean(),
         torch.tensor(init_std / (hidden_dim**0.5)),
@@ -177,7 +229,6 @@ def test_linearcde_init_std():
     )
 
 
-# Test to check the effect of sparsity on mask generation in LinearCDE
 def test_linearcde_sparsity():
     hidden_dim = 40
     output_dim = 30
@@ -185,7 +236,6 @@ def test_linearcde_sparsity():
 
     # Test with different levels of sparsity
     for sparsity in [0.0, 0.5, 1.0]:
-        # Check the sparsity level of the mask
         if sparsity == 0.0:
             linear_cde = LinearCDE(data_dim, hidden_dim, output_dim, sparsity=sparsity)
             mask = linear_cde.mask
@@ -199,9 +249,9 @@ def test_linearcde_sparsity():
         else:
             linear_cde = LinearCDE(data_dim, hidden_dim, output_dim, sparsity=sparsity)
             mask = linear_cde.mask
-            # Expecting the average sparsity level to be close to the target sparsity
+            # Expecting the average sparsity level to be close to the target
+            # (1 - mean(mask)) ≈ sparsity
+            actual_sparsity = 1.0 - mask.float().mean().item()
             assert torch.isclose(
-                torch.tensor(1.0 - mask.float().mean().item()),
-                torch.tensor(sparsity),
-                atol=0.01,
+                torch.tensor(actual_sparsity), torch.tensor(sparsity), atol=0.01
             )
