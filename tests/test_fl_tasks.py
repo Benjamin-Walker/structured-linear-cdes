@@ -308,18 +308,18 @@ def test_bucket_sort_generate():
 def test_bucket_sort_preprocess():
     test_cases = [
         (
-            [4, 2, 3, 1, 5, 11],
+            [4, 2, 3, 1, 5, 10],
             [1, 2, 3, 4, 5],
             [0] * 5 + [1, 2, 3, 4, 5],
             [0] * 5 + [1] * 5,
         ),
         (
-            [7, 2, 3, 4, 5, 6, 1, 8, 9, 10, 11],
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            [0] * 10 + [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            [0] * 10 + [1] * 10,
+            [7, 2, 3, 4, 5, 6, 1, 8, 9, 10],
+            [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            [0] * 9 + [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            [0] * 9 + [1] * 9,
         ),
-        ([1, 11], [1], [0, 1], [0, 1]),
+        ([1, 10], [1], [0, 1], [0, 1]),
     ]
 
     for tokens, answer, expected_target, expected_mask in test_cases:
@@ -341,7 +341,7 @@ def test_cycle_nav_generate():
         assert isinstance(sample[0], list)
         assert isinstance(sample[1], int)
         assert 3 <= len(sample[0]) <= 10
-        assert 0 <= sample[1] <= 4
+        assert 4 <= sample[1] <= 8
 
     sample = generate_sample_cycle_nav(3, 3, random.Random(0))
     assert len(sample[0]) == 3
@@ -352,9 +352,9 @@ def test_cycle_nav_generate():
 
 def test_cycle_nav_preprocess():
     test_cases = [
-        ([["+1", "-1", "STAY"], 0], [2, 3, 1], [0, 0, 0], [0, 0, 1]),
-        ([["+1", "-1", "STAY", "+1"], 1], [2, 3, 1, 2], [0, 0, 0, 1], [0, 0, 0, 1]),
-        ([["STAY", "-1"], 4], [1, 3], [0, 4], [0, 1]),
+        ([["+1", "-1", "STAY"], 4], [2, 3, 1], [0, 0, 4], [0, 0, 1]),
+        ([["+1", "-1", "STAY", "+1"], 5], [2, 3, 1, 2], [0, 0, 0, 5], [0, 0, 0, 1]),
+        ([["STAY", "-1"], 8], [1, 3], [0, 8], [0, 1]),
     ]
 
     for sample, expected_input, expected_target, expected_mask in test_cases:

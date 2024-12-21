@@ -16,7 +16,7 @@ def generate_sample(min_length, max_length, generator):
         elif move == "-1":
             position -= 1
 
-    final_position = position % max_position
+    final_position = 4 + position % max_position
 
     return movements, final_position
 
