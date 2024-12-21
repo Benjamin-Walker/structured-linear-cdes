@@ -84,10 +84,6 @@ def test_linearcde_forward():
 
 
 def test_stackedlcde_forward():
-    """
-    Updated test for the StackedLCDE forward pass.
-    (Previously named test_a5linearcde_forward but renamed for clarity.)
-    """
     batch_size = 2
     seq_len = 3
     num_blocks = 2
@@ -97,8 +93,6 @@ def test_stackedlcde_forward():
     label_dim = 6
 
     # The stacked LCDE expects an input of shape (batch_size, seq_len, data_dim)
-    # if it used an embedding, or just (batch_size, seq_len) if it has an internal nn.Embedding.
-    # Adjust according to how your StackedLCDE is actually implemented.
     model = StackedLCDE(
         num_blocks=num_blocks,
         hidden_dim=hidden_dim,
