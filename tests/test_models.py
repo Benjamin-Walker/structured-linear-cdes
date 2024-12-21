@@ -13,18 +13,20 @@ def test_mamba_block_forward():
     """
     batch_size = 2
     seq_len = 3
-    input_dim = 8
+    input_dim = 256
     dropout_rate = 0.1
 
-    block = MambaBlock(input_dim, dropout_rate=dropout_rate)
+    # Ensure test runs on GPU if available
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    x = torch.randn(batch_size, seq_len, input_dim)
+    block = MambaBlock(input_dim, dropout_rate=dropout_rate).to(device)
+    x = torch.randn(batch_size, seq_len, input_dim).to(device)
+
+    # Perform forward pass
     out = block(x)
 
-    # Output should match the input shape
+    # Assert output shape matches input shape
     assert out.shape == (batch_size, seq_len, input_dim)
-    # Check that forward pass runs without error
-    assert out is not None
 
 
 def test_stacked_mamba_forward():
@@ -36,34 +38,30 @@ def test_stacked_mamba_forward():
     batch_size = 2
     seq_len = 3
     num_blocks = 2
-    model_dim = 8
-    data_dim = 10  # used for nn.Embedding in StackedMamba
+    model_dim = 256
+    data_dim = 10  # Used for nn.Embedding in StackedMamba
     label_dim = 5
     dropout_rate = 0.1
 
-    # Create a stacked Mamba model
+    # Ensure test runs on GPU if available
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     model = StackedMamba(
         num_blocks=num_blocks,
         model_dim=model_dim,
         data_dim=data_dim,
         label_dim=label_dim,
         dropout_rate=dropout_rate,
-    )
+    ).to(device)
 
     # Input of token IDs (batch_size, seq_len)
-    X = torch.randint(0, data_dim, (batch_size, seq_len))
+    X = torch.randint(0, data_dim, (batch_size, seq_len)).to(device)
 
-    # Forward pass
+    # Perform forward pass
     out = model(X)
 
-    # The output should have shape (batch_size, seq_len, label_dim)
+    # Assert output shape matches expected shape
     assert out.shape == (batch_size, seq_len, label_dim)
-    assert out is not None
-
-
-# ---------------------------
-# Tests for LinearCDE
-# ---------------------------
 
 
 def test_linearcde_forward():

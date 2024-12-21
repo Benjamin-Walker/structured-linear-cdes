@@ -1,7 +1,12 @@
+import warnings
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mamba_ssm import Mamba2
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    from mamba_ssm import Mamba2
 
 
 class MambaBlock(nn.Module):
