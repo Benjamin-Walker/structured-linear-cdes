@@ -7,6 +7,9 @@
   "batch_size": 256,
   "num_steps": 1000000,
   "print_steps": 10000,
-  "learning_rate": 0.0002
+  "learning_rate": 0.0002,
+  "diagonal": false,
+  "fwht": false,
+  "use_glu": true
 }
 

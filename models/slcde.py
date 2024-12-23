@@ -153,10 +153,13 @@ class LinearCDE(nn.Module):
                         "ij,bj->bi", self.hadamard, state_transition
                     )
             else:
-                state_transition = torch.einsum(
-                    "bij,bj->bi",
-                    A.view(-1, self.hidden_dim, self.hidden_dim) + Bs[:, i - 1],
-                    y,
+                state_transition = (
+                    torch.einsum(
+                        "bij,bj->bi",
+                        A.view(-1, self.hidden_dim, self.hidden_dim),
+                        y,
+                    )
+                    + Bs[:, i - 1]
                 )
             y = y + state_transition * (1 / seq_len)
             ys[:, i] = y

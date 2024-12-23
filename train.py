@@ -172,6 +172,9 @@ def run_experiment(config):
     learning_rate = config["learning_rate"]
 
     # Optional fields
+    diagonal = config.get("diagonal", False)
+    fwht = config.get("fwht", False)
+    use_glu = config.get("use_glu", False)
     early_stop_threshold = config.get("early_stop_threshold", 1.0)
     length = config.get("length")
 
@@ -228,7 +231,7 @@ def run_experiment(config):
             model_dim=model_dim,
             data_dim=data_dim,
             label_dim=label_dim,
-            use_glu=False,
+            use_glu=use_glu,
         )
     elif model_name == "lcde":
         model = StackedLCDE(
@@ -238,9 +241,9 @@ def run_experiment(config):
             embedding_dim=model_dim,
             label_dim=label_dim,
             init_std=1.0,
-            use_glu=True,
-            diagonal=True,
-            fwht=True,
+            use_glu=use_glu,
+            diagonal=diagonal,
+            fwht=fwht,
         )
     else:
         raise ValueError("Model not recognized. Must be 'mamba' or 'lcde'.")
