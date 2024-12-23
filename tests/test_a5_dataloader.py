@@ -51,7 +51,7 @@ def test_create_a5_dataloaders(mock_read_csv):
     mock_read_csv.return_value = mock_df
 
     # Create dataloaders
-    train_loader, test_loader = create_a5_dataloaders(
+    train_loader, test_loader, data_dim, label_dim = create_a5_dataloaders(
         length=mock_length, train_split=0.75, batch_size=mock_batch_size
     )
 
@@ -60,22 +60,26 @@ def test_create_a5_dataloaders(mock_read_csv):
     assert isinstance(test_loader, DataLoader)
     assert len(train_loader.dataset) == int(0.75 * mock_number_of_samples)
     assert len(test_loader.dataset) == int(0.25 * mock_number_of_samples)
+    assert data_dim == 60
+    assert label_dim == 60
 
     # Check batch content
     train_indices = set()
     test_indices = set()
 
     for batch in train_loader:
-        inputs, targets = batch
+        inputs, targets, masks = batch
         assert inputs.shape == (mock_batch_size, mock_length)
         assert targets.shape == (mock_batch_size, mock_target_size)
+        assert masks.shape == (mock_batch_size, mock_length)
         for input_tensor in inputs:
             train_indices.add(tuple(input_tensor.tolist()))
 
     for batch in test_loader:
-        inputs, targets = batch
+        inputs, targets, masks = batch
         assert inputs.shape == (mock_batch_size, mock_length)
         assert targets.shape == (mock_batch_size, mock_target_size)
+        assert masks.shape == (mock_batch_size, mock_length)
         for input_tensor in inputs:
             test_indices.add(tuple(input_tensor.tolist()))
 
@@ -89,7 +93,7 @@ def test_create_a5_dataloaders_no_test_split(mock_read_csv):
     mock_read_csv.return_value = mock_df
 
     # Create dataloaders with no test split
-    train_loader, test_loader = create_a5_dataloaders(
+    train_loader, test_loader, data_dim, label_dim = create_a5_dataloaders(
         length=mock_length, train_split=1.0, batch_size=mock_batch_size
     )
 
@@ -99,9 +103,12 @@ def test_create_a5_dataloaders_no_test_split(mock_read_csv):
     assert (
         len(train_loader.dataset) == mock_number_of_samples
     )  # All data in train_loader
+    assert data_dim == 60
+    assert label_dim == 60
 
     # Check batch content
     for batch in train_loader:
-        inputs, targets = batch
+        inputs, targets, masks = batch
         assert inputs.shape == (mock_batch_size, mock_length)
         assert targets.shape == (mock_batch_size, mock_target_size)
+        assert masks.shape == (mock_batch_size, mock_length)
