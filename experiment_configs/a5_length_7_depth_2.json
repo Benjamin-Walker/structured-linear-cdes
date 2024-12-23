@@ -1,0 +1,12 @@
+{
+  "task": "A5",
+  "length": 7,
+  "model_name": "lcde",
+  "num_blocks": 2,
+  "model_dim": 128,
+  "batch_size": 256,
+  "num_steps": 1000000,
+  "print_steps": 10000,
+  "learning_rate": 0.0002
+}
+

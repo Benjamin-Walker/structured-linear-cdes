@@ -12,12 +12,11 @@ with warnings.catch_warnings():
 class MambaBlock(nn.Module):
     """
     A single Mamba block that applies:
-      1. Layer Normalization
-      2. Mamba2 module
+      1. Mamba2 module
+      2. (Optionally) a linear layer + GLU activation,
       3. Residual connection
-      4. Dropout
-      5. (Optionally) a linear layer + GLU activation,
-         which preserves the model_dim dimension.
+      4. Layer Normalization
+      5. Dropout
 
     Args:
         model_dim (int): Dimensionality of the model (d_model).
@@ -51,6 +50,7 @@ class MambaBlock(nn.Module):
         Returns:
             torch.Tensor: Output tensor of the same shape (batch_size, seq_len, model_dim).
         """
+
         # Mamba2 module
         y = self.mamba(x)
 
