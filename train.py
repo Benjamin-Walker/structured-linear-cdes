@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from data_dir.dataloaders import create_fl_dataloaders
+from data_dir.dataloaders import create_a5_dataloaders, create_fl_dataloaders
 from models.lr_scheduler import LinearWarmupCosineAnnealing
 from models.mamba import StackedMamba
 from models.slcde import StackedLCDE
@@ -21,7 +21,6 @@ def train_model(model, dataloader, num_steps, print_steps, learning_rate, device
         ],
         lr=learning_rate,
     )
-    # optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.1)
     lr_scheduler = LinearWarmupCosineAnnealing(
         optimizer,
         0.1 * num_steps,
@@ -94,53 +93,60 @@ def train_model(model, dataloader, num_steps, print_steps, learning_rate, device
                 total_loss = 0
                 model.train()
 
+                if val_acc / val_num > 0.9:
+                    return model, steps, val_accs, True
+
             if step >= num_steps:
                 break
 
             step += 1
 
-    return model, steps, val_accs
+    return model, steps, val_accs, False
 
 
 if __name__ == "__main__":
-    task_list = [
-        "bucket_sort",
-        "cycle_nav",
-        "even_pairs",
-        "majority",
-        "majority_count",
-        "mod_arith_no_brack",
-        "mod_arith_w_brack",
-        "missing_duplicate",
-        "odds_first",
-        "parity",
-        "repetition",
-        "reverse_string",
-        "set",
-        "solve_equation",
-        "stack_manipulation",
-    ]
+    # task_list = [
+    #     "bucket_sort",
+    #     "cycle_nav",
+    #     "even_pairs",
+    #     "majority",
+    #     "majority_count",
+    #     "mod_arith_no_brack",
+    #     "mod_arith_w_brack",
+    #     "missing_duplicate",
+    #     "odds_first",
+    #     "parity",
+    #     "repetition",
+    #     "reverse_string",
+    #     "set",
+    #     "solve_equation",
+    #     "stack_manipulation",
+    # ]
 
-    random_guess = {
-        "bucket_sort": 1 / 10,
-        "cycle_nav": 1 / 5,
-        "even_pairs": 1 / 2,
-        "majority": 1 / 63,
-        "majority_count": 1 / 63,
-        "missing_duplicate": 1 / 9,
-        "mod_arith_no_brack": 1 / 5,
-        "mod_arith_w_brack": 1 / 5,
-        "odds_first": 1 / 10,
-        "parity": 1 / 2,
-        "repetition": 1 / 10,
-        "reverse_string": 1 / 10,
-        "set": 1 / 10,
-        "solve_equation": 1 / 5,
-        "stack_manipulation": 1 / 4,
-    }
+    # random_guess = {
+    #     "bucket_sort": 1 / 10,
+    #     "cycle_nav": 1 / 5,
+    #     "even_pairs": 1 / 2,
+    #     "majority": 1 / 63,
+    #     "majority_count": 1 / 63,
+    #     "missing_duplicate": 1 / 9,
+    #     "mod_arith_no_brack": 1 / 5,
+    #     "mod_arith_w_brack": 1 / 5,
+    #     "odds_first": 1 / 10,
+    #     "parity": 1 / 2,
+    #     "repetition": 1 / 10,
+    #     "reverse_string": 1 / 10,
+    #     "set": 1 / 10,
+    #     "solve_equation": 1 / 5,
+    #     "stack_manipulation": 1 / 4,
+    # }
+
+    task = "A5"
+    lengths = list(range(3, 21))
+    depths = list(range(1, 5))
 
     model_name = "lcde"
-    num_blocks = 2
+    num_blocks = 1
     batch_size = 256
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -148,54 +154,87 @@ if __name__ == "__main__":
     best_val_accs = {}
     best_scaled_val_accs = {}
 
-    for task in task_list:
-        train_dataloader, _, data_dim, label_dim = create_fl_dataloaders(
-            task,
-            num_samples=25600000,
-            batch_size=batch_size,
-            min_length=3,
-            max_length=40,
-            padding_length=260,
-            train_split=1.0,
-            seed=1234,
-        )
+    depth_recurrence = depths.copy()
 
-        val_dataloader, _, _, _ = create_fl_dataloaders(
-            task,
-            num_samples=8192,
-            batch_size=batch_size,
-            min_length=40,
-            max_length=256,
-            padding_length=260,
-            train_split=1.0,
-            seed=2345,
-        )
+    for length in lengths:
+        depths_to_remove = []
+        for depth in depth_recurrence:
+            print(f"Length: {length}, Depth: {depth}")
+            if task == "A5":
+                train_dataloader, val_dataloader, data_dim, label_dim = (
+                    create_a5_dataloaders(
+                        length, train_split=0.8, batch_size=batch_size
+                    )
+                )
+                dataloader_length2, _, _, _ = create_a5_dataloaders(
+                    2, train_split=1.0, batch_size=batch_size // 10
+                )
 
-        if model_name == "mamba":
-            model_dim = 512
-            model = StackedMamba(4, model_dim, data_dim, label_dim, use_glu=True)
-        elif model_name == "lcde":
-            model_dim = 128
-            model = StackedLCDE(
-                1,
-                model_dim,
-                data_dim,
-                model_dim,
-                label_dim,
-                init_std=1 / 20,
-                sparsity=0.1,
-                use_glu=True,
+                def train_dataloader_multilength():
+                    while True:
+                        for (X, y), (X_2, y_2) in zip(
+                            train_dataloader, dataloader_length2
+                        ):
+                            yield (X, X_2), (y, y_2)
+            else:
+                train_dataloader, _, data_dim, label_dim = create_fl_dataloaders(
+                    task,
+                    num_samples=25600000,
+                    batch_size=batch_size,
+                    min_length=3,
+                    max_length=40,
+                    padding_length=260,
+                    train_split=1.0,
+                    seed=1234,
+                )
+
+                val_dataloader, _, _, _ = create_fl_dataloaders(
+                    task,
+                    num_samples=8192,
+                    batch_size=batch_size,
+                    min_length=40,
+                    max_length=256,
+                    padding_length=260,
+                    train_split=1.0,
+                    seed=2345,
+                )
+
+            if model_name == "mamba":
+                model_dim = 512
+                model = StackedMamba(
+                    num_blocks, model_dim, data_dim, label_dim, use_glu=True
+                )
+            elif model_name == "lcde":
+                model_dim = 128
+                model = StackedLCDE(
+                    depth,
+                    model_dim,
+                    data_dim,
+                    model_dim,
+                    label_dim,
+                    init_std=1 / 20,
+                    use_glu=True,
+                    diagonal=True,
+                    fwht=True,
+                )
+            else:
+                raise ValueError("Model not recognized")
+
+            dataloader = {"train": train_dataloader, "val": val_dataloader}
+
+            model, steps, val_accs, early_stop = train_model(
+                model,
+                dataloader,
+                num_steps=1000000,
+                print_steps=10000,
+                learning_rate=2e-4,
+                device=device,
             )
-        else:
-            raise ValueError("Model not recognized")
 
-        dataloader = {"train": train_dataloader, "val": val_dataloader}
+            if early_stop:
+                break
+            else:
+                depths_to_remove.append(depth)
 
-        model, steps, val_accs = train_model(
-            model,
-            dataloader,
-            num_steps=1000000,
-            print_steps=1000,
-            learning_rate=1e-4,
-            device=device,
-        )
+        for depth in depths_to_remove:
+            depth_recurrence.remove(depth)

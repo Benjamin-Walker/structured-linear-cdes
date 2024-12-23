@@ -51,17 +51,8 @@ class MambaBlock(nn.Module):
         Returns:
             torch.Tensor: Output tensor of the same shape (batch_size, seq_len, model_dim).
         """
-        # Pre-LayerNorm
-        norm_x = self.norm(x)
-
         # Mamba2 module
-        y = self.mamba(norm_x)
-
-        # Residual connection
-        y = y + x
-
-        # Dropout
-        y = self.drop(y)
+        y = self.mamba(x)
 
         # Optional: Linear -> GLU
         if self.use_glu:
@@ -69,6 +60,15 @@ class MambaBlock(nn.Module):
             y = self.post_linear(y)
             # shape: (batch_size, seq_len, model_dim)
             y = F.glu(y, dim=-1)
+
+        # Residual connection
+        y = y + x
+
+        # Layer Normalization
+        y = self.norm(y)
+
+        # Dropout
+        y = self.drop(y)
 
         return y
 
