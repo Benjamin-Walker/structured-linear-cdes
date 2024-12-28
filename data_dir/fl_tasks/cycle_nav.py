@@ -1,11 +1,15 @@
 import torch
 
-vocab_size = 9
-max_position = vocab_size - 4
+max_position = 5
+vocab_size = max_position + 4
 
 
 def generate_sample(min_length, max_length, generator):
     """Generates a single sample for the Cycle Nav task."""
+
+    if min_length > max_length:
+        raise ValueError("min_length must be less than or equal to max_length")
+
     length = generator.randint(min_length, max_length)
     movements = [generator.choice(["+1", "-1", "STAY"]) for _ in range(length)]
 

@@ -1,10 +1,14 @@
 import torch
 
-vocab_size = 10
+modulus = 5
+vocab_size = modulus + 5
 
 
 def generate_sample(min_length, max_length, generator):
     """Generates a single sample for the Modular Arithmetic task with BIDMAS order of operations."""
+
+    if min_length > max_length:
+        raise ValueError("min_length must be less than or equal to max_length")
 
     original_length = generator.randint(min_length, max_length)
 

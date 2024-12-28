@@ -1,6 +1,7 @@
 import torch
 
-vocab_size = 12
+modulus = 5
+vocab_size = modulus + 7
 
 
 def generate_sample(min_length, max_length, generator):
@@ -18,7 +19,8 @@ def generate_sample(min_length, max_length, generator):
         - target_value is the computed result modulo the modulus.
     """
 
-    modulus = vocab_size - 7
+    if min_length > max_length:
+        raise ValueError("min_length must be less than or equal to max_length")
 
     def gen_terminal():
         """Generates a random terminal value."""
@@ -74,6 +76,10 @@ def generate_sample(min_length, max_length, generator):
         vocab[str(i)] = i + 1
 
     input_sequence = [vocab[char] for char in expression_str]
+
+    # Set the '=' operator at last position
+    input_sequence.append(11)
+
     result = vocab[str(result)]
     return input_sequence, result
 

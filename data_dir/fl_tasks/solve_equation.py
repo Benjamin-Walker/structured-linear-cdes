@@ -8,6 +8,9 @@ vocab_size = 14  # Numbers 0-4, '+', '-', '*', '(', ')', '=', 'x', [PAD], [ACT]
 
 
 def generate_sample(min_length, max_length, generator):
+    if min_length > max_length:
+        raise ValueError("min_length must be less than or equal to max_length")
+
     sample = generate_sample_mod_arith_w_brack(min_length, max_length, generator)
 
     # Replace a number with 'x'
