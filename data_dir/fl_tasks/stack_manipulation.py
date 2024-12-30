@@ -23,9 +23,11 @@ def generate_sample(min_length, max_length, generator):
     ]
     final_stack = initial_stack.copy()
 
-    actions = generator.randint(
-        0, num_elements, size=(length // 2 - initial_stack_length,)
-    )
+    actions = [
+        generator.randint(0, num_elements)
+        for _ in range(length // 2 - initial_stack_length)
+    ]
+
     operations = []
 
     for action in actions:

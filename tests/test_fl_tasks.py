@@ -583,7 +583,8 @@ def test_stack_manipulation_generate():
         assert len(sample) == 2
         assert isinstance(sample[0], list)
         assert isinstance(sample[1], list)
-        assert 3 <= len(sample[0]) <= 10
+        assert 2 <= len(sample[0]) <= 6
+        assert 4 <= len(sample[1]) <= 10
         stack = []
         for token in sample[0]:
             if isinstance(token, int):
@@ -602,8 +603,8 @@ def test_stack_manipulation_generate():
     assert len(sample[1]) == 4
 
     sample = generate_sample_stack_manipulation(10, 10, random.Random(0))
-    assert len(sample[0]) == 5
-    assert len(sample[1]) == 8
+    assert len(sample[0]) == 6
+    assert len(sample[1]) == 10
 
 
 def test_stack_manipulation_preprocess():
@@ -693,9 +694,7 @@ def test_set_preprocess():
 def test_generate_sample_mod_arith_with_brackets():
     import random
 
-    vocab_size = 12
-    modulus = vocab_size - 7
-
+    modulus = 5
     vocab = {
         "+": modulus + 1,
         "-": modulus + 2,
