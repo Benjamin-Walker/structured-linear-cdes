@@ -12,11 +12,20 @@ def generate_sample(min_length, max_length, generator):
 
     length = generator.randint(min_length, max_length)
 
+    # length gives the total length of target_sequence
+    if length % 2 == 1:
+        length += 1
+
     # Initialize the stack content and the actions
-    initial_stack = [generator.randint(1, num_elements) for _ in range(length)]
+    initial_stack_length = generator.randint(1, length // 2)
+    initial_stack = [
+        generator.randint(1, num_elements) for _ in range(initial_stack_length)
+    ]
     final_stack = initial_stack.copy()
 
-    actions = generator.randint(0, num_elements, size=(max_length - length,))
+    actions = generator.randint(
+        0, num_elements, size=(length // 2 - initial_stack_length,)
+    )
     operations = []
 
     for action in actions:
@@ -31,7 +40,11 @@ def generate_sample(min_length, max_length, generator):
     sequence = (
         [f"ST{el}" for el in initial_stack] + operations + [int(vocab_size - 1)]
     )  # Using [ACT] token as 10
-    target_sequence = [0] * (len(sequence) - 1) + [f"ST{el}" for el in final_stack]
+    target_sequence = (
+        [0] * (len(sequence) - 1)
+        + [f"ST{el}" for el in final_stack]
+        + [0] * (length // 2 - len(final_stack))
+    )
 
     return sequence, target_sequence
 
