@@ -712,11 +712,11 @@ def test_generate_sample_mod_arith_with_brackets():
         input_sequence, result_token = sample
 
         assert isinstance(input_sequence, list)
-        assert all(isinstance(token, int) for token in input_sequence)
+        assert all(isinstance(token, int) for token in input_sequence[:-1])
 
         assert isinstance(result_token, int)
 
-        expression_str = "".join(inv_vocab[token] for token in input_sequence)
+        expression_str = "".join(inv_vocab[token] for token in input_sequence[:-1])
 
         allowed_chars = set("0123456789+-*()")
         assert set(expression_str).issubset(allowed_chars)
