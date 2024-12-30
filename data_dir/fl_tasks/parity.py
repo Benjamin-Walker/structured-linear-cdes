@@ -6,6 +6,9 @@ vocab_size = 3
 def generate_sample(min_length, max_length, generator):
     """Generates a single sample for the Parity task."""
 
+    if min_length > max_length:
+        raise ValueError("min_length must be less than or equal to max_length")
+
     length = generator.randint(min_length, max_length)
 
     sequence = [generator.choice(["a", "b"]) for _ in range(length)]

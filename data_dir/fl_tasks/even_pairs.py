@@ -5,6 +5,10 @@ vocab_size = 3
 
 def generate_sample(min_length, max_length, generator):
     """Generates a single sample for the Even Pairs task."""
+
+    if min_length > max_length:
+        raise ValueError("min_length must be less than or equal to max_length")
+
     length = generator.randint(min_length, max_length)
     binary_string = [generator.choice(["a", "b"]) for _ in range(length)]
     target = "a" if binary_string[0] == binary_string[-1] else "b"

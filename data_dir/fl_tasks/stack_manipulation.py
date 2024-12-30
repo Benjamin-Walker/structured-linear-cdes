@@ -1,35 +1,52 @@
 import torch
 
-vocab_size = 11
-num_elements = (vocab_size - 3) // 2  # Number of unique stack elements
+num_elements = 2  # Number of unique stack elements
+vocab_size = num_elements * 2 + 3
 
 
 def generate_sample(min_length, max_length, generator):
     """Generates a single sample for the Stack Manipulation task."""
 
+    if min_length > max_length:
+        raise ValueError("min_length must be less than or equal to max_length")
+
     length = generator.randint(min_length, max_length)
+
+    # length gives the total length of target_sequence
     if length % 2 == 1:
         length += 1
-    initial_stack = [generator.randint(1, num_elements) for _ in range(length // 4)]
 
+    # Initialize the stack content and the actions
+    initial_stack_length = generator.randint(1, length // 2)
+    initial_stack = [
+        generator.randint(1, num_elements) for _ in range(initial_stack_length)
+    ]
     final_stack = initial_stack.copy()
+
+    actions = [
+        generator.randint(0, num_elements)
+        for _ in range(length // 2 - initial_stack_length)
+    ]
+
     operations = []
-    for _ in range(length // 4):
-        if (
-            generator.random() < 0.5 or not final_stack
-        ):  # 50% chance or if stack is empty
-            operation = generator.randint(1, num_elements)  # Push operation (PSx)
-            operations.append(f"PS{operation}")
-            final_stack.append(operation)
-        else:
-            operations.append("POP")
+
+    for action in actions:
+        if action == 0:
             if final_stack:
                 final_stack.pop()
+                operations.append("POP")
+        else:
+            final_stack.append(action)
+            operations.append(f"PS{action}")
 
     sequence = (
-        [f"ST{el}" for el in initial_stack] + operations + [10]
+        [f"ST{el}" for el in initial_stack] + operations + [int(vocab_size - 1)]
     )  # Using [ACT] token as 10
-    target_sequence = [0] * (len(sequence) - 1) + [f"ST{el}" for el in final_stack]
+    target_sequence = (
+        [0] * (len(sequence) - 1)
+        + [f"ST{el}" for el in final_stack]
+        + [0] * (length // 2 - len(final_stack))
+    )
 
     return sequence, target_sequence
 
