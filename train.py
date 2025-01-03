@@ -8,13 +8,23 @@ import torch.nn as nn
 import torch.optim as optim
 
 # Local imports
-from data_dir.dataloaders import create_a5_dataloaders, create_fl_dataloaders
+from data_dir.dataloaders import (
+    create_a5_dataloaders,
+    create_fl_dataloaders,
+    create_snake_dataloaders,
+)
 from models.lr_scheduler import LinearWarmupCosineAnnealing
+from models.lstm import LSTM
 from models.mamba import StackedMamba
 from models.slcde import StackedLCDE
 
 
 def train_model(
+    config,
+    data_dim,
+    label_dim,
+    task,
+    model_name,
     model,
     dataloader,
     num_steps,
@@ -49,7 +59,7 @@ def train_model(
         early_stop (bool): Whether early stopping was triggered.
     """
     model.to(device)
-    embedding_params = list(model.embedding.parameters())
+    embedding_params = [p for n, p in model.named_parameters() if "embedding" in n]
     other_params = [p for n, p in model.named_parameters() if "embedding" not in n]
 
     optimizer = optim.AdamW(
@@ -140,12 +150,48 @@ def train_model(
                 steps.append(step)
                 val_accs.append(accuracy)
 
+                timestamp_str = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+                # Save model checkpoint
+                checkpoint = {
+                    "model_state_dict": model.state_dict(),
+                    "config": config,
+                    "data_dim": data_dim,
+                    "label_dim": label_dim,
+                    "model_name": model_name,
+                    "final_val_acc": val_accs[-1] if val_accs else None,
+                    "timestamp": timestamp_str,
+                }
+
+                checkpoint_filename = f"checkpoint_{task}_{model_name}.pt"
+                checkpoint_path = os.path.join("checkpoints", checkpoint_filename)
+                torch.save(checkpoint, checkpoint_path)
+                print(f"Saved model checkpoint to: {checkpoint_path}")
+
+                early_stop = accuracy > early_stop_threshold
+
+                out_filename = f"results_{task}_{model_name}.json"
+                out_path = os.path.join("results", out_filename)
+
+                # Gather all relevant info to save:
+                results_dict = {
+                    "config": config,
+                    "steps": steps,
+                    "val_accs": val_accs,
+                    "early_stop": early_stop,
+                }
+
+                with open(out_path, "w") as f:
+                    json.dump(results_dict, f, indent=2)
+
+                print(f"Saved results to: {out_path}")
+
                 start_time = time.time()
                 total_loss = 0
                 model.train()
 
                 # Early stopping example
-                if accuracy > early_stop_threshold:
+                if early_stop:
                     return model, steps, val_accs, True
 
             if step >= num_steps:
@@ -199,7 +245,16 @@ def run_experiment(config):
                     yield (X, X_2), (y, y_2), (mask, mask_2)
 
         dataloader = {"train": train_dataloader_multilength(), "val": val_dataloader}
+    elif task == "snake":
+        train_dataloader, val_dataloader, data_dim, label_dim = (
+            create_snake_dataloaders(
+                pt_file="data_dir/snake_games/big_snake.pt",
+                batch_size=batch_size,
+                train_split=0.999,
+            )
+        )
 
+        dataloader = {"train": train_dataloader, "val": val_dataloader}
     else:
         # Formal language tasks, e.g. "majority"
         train_dataloader, _, data_dim, label_dim = create_fl_dataloaders(
@@ -236,20 +291,38 @@ def run_experiment(config):
     elif model_name == "lcde":
         model = StackedLCDE(
             num_blocks=num_blocks,
-            hidden_dim=model_dim,
+            model_dim=model_dim,
             data_dim=data_dim,
-            embedding_dim=model_dim,
             label_dim=label_dim,
             init_std=1.0,
             use_glu=use_glu,
             diagonal=diagonal,
             fwht=fwht,
         )
+    elif model_name == "lstm":
+        model = LSTM(
+            num_blocks=num_blocks,
+            data_dim=data_dim,
+            model_dim=model_dim,
+            label_dim=label_dim,
+        )
     else:
-        raise ValueError("Model not recognized. Must be 'mamba' or 'lcde'.")
+        raise ValueError("Model not recognized. Must be 'mamba', 'lcde', or 'lstm'.")
+
+    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Number of trainable parameters: {pytorch_total_params}")
+
+    # Create directories for results and checkpoints
+    os.makedirs("results", exist_ok=True)
+    os.makedirs("checkpoints", exist_ok=True)
 
     # Train
     model, steps, val_accs, early_stop = train_model(
+        config=config,
+        data_dim=data_dim,
+        label_dim=label_dim,
+        task=task,
+        model_name=model_name,
         model=model,
         dataloader=dataloader,
         num_steps=num_steps,
@@ -263,29 +336,3 @@ def run_experiment(config):
         print("Early stop triggered! Finished before reaching num_steps.")
     else:
         print("Training complete. Did not trigger early stopping.")
-
-    # -------------------------------------------------
-    # Save results to results/ directory (no model ckpt)
-    # -------------------------------------------------
-    os.makedirs("results", exist_ok=True)  # Ensure results/ exists
-    timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    # We'll build a filename that captures the task + timestamp
-    # You can customize however you want:
-    out_filename = f"results_{task}_{timestamp_str}.json"
-    out_path = os.path.join("results", out_filename)
-
-    # Gather all relevant info to save:
-    results_dict = {
-        "config": config,
-        "steps": steps,
-        "val_accs": val_accs,
-        "early_stop": early_stop,
-    }
-
-    with open(out_path, "w") as f:
-        json.dump(results_dict, f, indent=2)
-
-    print(f"Saved results to: {out_path}")
-    # You could return results_dict if desired
-    return results_dict

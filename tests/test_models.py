@@ -69,9 +69,8 @@ def test_linearcde_forward():
     seq_len = 3
     input_dim = 4
     hidden_dim = 5
-    output_dim = 4
 
-    linear_cde = LinearCDE(input_dim, hidden_dim, output_dim)
+    linear_cde = LinearCDE(input_dim, hidden_dim)
 
     # Input tensor (batch_size, seq_len, input_dim)
     X = torch.randn(batch_size, seq_len, input_dim)
@@ -80,24 +79,22 @@ def test_linearcde_forward():
     output = linear_cde(X)
 
     # Check the output shape
-    assert output.shape == (batch_size, seq_len, output_dim)
+    assert output.shape == (batch_size, seq_len, hidden_dim)
 
 
 def test_stackedlcde_forward():
     batch_size = 2
     seq_len = 3
     num_blocks = 2
-    hidden_dim = 5
-    embedding_dim = 10
+    model_dim = 10
     data_dim = 4
     label_dim = 6
 
     # The stacked LCDE expects an input of shape (batch_size, seq_len, data_dim)
     model = StackedLCDE(
         num_blocks=num_blocks,
-        hidden_dim=hidden_dim,
+        model_dim=model_dim,
         data_dim=data_dim,
-        embedding_dim=embedding_dim,
         label_dim=label_dim,
     )
 
@@ -114,14 +111,11 @@ def test_stackedlcde_forward():
 def test_increment_linearcde():
     input_dim = 1
     hidden_dim = 3
-    output_dim = 1
 
-    linear_cde = LinearCDE(input_dim, hidden_dim, output_dim)
+    linear_cde = LinearCDE(input_dim, hidden_dim)
     with torch.no_grad():
         linear_cde.init_layer.weight.data.fill_(0)
         linear_cde.vf_B.weight.fill_(0)
-        linear_cde.linear.weight = torch.nn.Parameter(torch.eye(hidden_dim))
-        linear_cde.linear.bias = torch.nn.Parameter(torch.zeros(hidden_dim))
         bias_init = torch.zeros(hidden_dim)
         bias_init[0] = 1
         linear_cde.init_layer.bias = torch.nn.Parameter(bias_init)
@@ -146,17 +140,16 @@ def test_stackedlcde_dropout():
     batch_size = 2
     seq_len = 3
     num_blocks = 2
-    hidden_dim = 5
+    model_dim = 8
     data_dim = 4
-    embedding_dim = 8
     label_dim = 6
 
     model = StackedLCDE(
         num_blocks=num_blocks,
-        hidden_dim=hidden_dim,
+        model_dim=model_dim,
         data_dim=data_dim,
-        embedding_dim=embedding_dim,
         label_dim=label_dim,
+        dropout_rate=0.1,
     )
 
     # Input tensor (batch_size, seq_len, data_dim)
@@ -189,7 +182,6 @@ def test_stackedlcde_dropout():
 def test_linearcde_init_std():
     input_dim = 20
     hidden_dim = 40
-    output_dim = 20
     init_std = 0.5
 
     init_layer_weight_stds = []
@@ -199,7 +191,7 @@ def test_linearcde_init_std():
 
     # We'll create multiple LinearCDE instances to gather stats
     for _ in range(100):
-        linear_cde = LinearCDE(input_dim, hidden_dim, output_dim, init_std=init_std)
+        linear_cde = LinearCDE(input_dim, hidden_dim, init_std=init_std)
         init_layer_weight_stds.append(linear_cde.init_layer.weight.std().item())
         init_layer_bias_stds.append(linear_cde.init_layer.bias.std().item())
         vf_B_weight_stds.append(linear_cde.vf_B.weight.std().item())
@@ -225,22 +217,21 @@ def test_linearcde_init_std():
 def test_linearcde_sparsity():
     input_dim = 20
     hidden_dim = 40
-    output_dim = 20
 
     # Test with different levels of sparsity
     for sparsity in [0.0, 0.5, 1.0]:
         if sparsity == 0.0:
-            linear_cde = LinearCDE(input_dim, hidden_dim, output_dim, sparsity=sparsity)
+            linear_cde = LinearCDE(input_dim, hidden_dim, sparsity=sparsity)
             mask = linear_cde.mask
             # Expecting all zeros
             assert torch.equal(mask, torch.zeros_like(mask, dtype=torch.bool))
         elif sparsity == 1.0:
-            linear_cde = LinearCDE(input_dim, hidden_dim, output_dim, sparsity=sparsity)
+            linear_cde = LinearCDE(input_dim, hidden_dim, sparsity=sparsity)
             mask = linear_cde.mask
             # Expecting all ones
             assert torch.equal(mask, torch.ones_like(mask, dtype=torch.bool))
         else:
-            linear_cde = LinearCDE(input_dim, hidden_dim, output_dim, sparsity=sparsity)
+            linear_cde = LinearCDE(input_dim, hidden_dim, sparsity=sparsity)
             mask = linear_cde.mask
             # Expecting the average sparsity level to be close to the target
             # (1 - mean(mask)) ≈ sparsity

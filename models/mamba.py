@@ -40,6 +40,10 @@ class MambaBlock(nn.Module):
         else:
             self.post_linear = None
 
+        # States for stepwise processing
+        self.conv_state = None
+        self.ssm_state = None
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the MambaBlock.
@@ -71,6 +75,27 @@ class MambaBlock(nn.Module):
 
         return y
 
+    def step(self, x: torch.Tensor) -> torch.Tensor:
+        if self.conv_state is None or self.ssm_state is None:
+            # Allocate states if not already initialized
+            batch_size = x.shape[0]
+            self.conv_state, self.ssm_state = self.mamba.allocate_inference_cache(
+                batch_size=batch_size, max_seqlen=1
+            )
+
+        # Process a single timestep using Mamba2's step
+        y, self.conv_state, self.ssm_state = self.mamba.step(
+            x, self.conv_state, self.ssm_state
+        )
+
+        # Optional GLU stage
+        if self.use_glu:
+            y = F.glu(self.post_linear(y), dim=-1)
+
+        # Layer normalization and dropout
+        y = self.norm(y + x)
+        return self.drop(y)
+
 
 class StackedMamba(nn.Module):
     """
@@ -95,11 +120,15 @@ class StackedMamba(nn.Module):
         label_dim: int,
         dropout_rate: float = 0.1,
         use_glu: bool = False,
+        second_embedding: bool = False,
     ):
         super().__init__()
 
-        # Use PyTorch's built-in Embedding
-        self.embedding = nn.Embedding(num_embeddings=data_dim, embedding_dim=model_dim)
+        self.second_embedding = second_embedding
+        embedding_dim = model_dim // 2 if second_embedding else model_dim
+        self.embedding = nn.Embedding(data_dim, embedding_dim)
+        if second_embedding:
+            self.embedding2 = nn.Embedding(data_dim, embedding_dim)
 
         # Create multiple MambaBlocks
         self.blocks = nn.ModuleList(
@@ -135,11 +164,29 @@ class StackedMamba(nn.Module):
                           before the final linear layer or after its output.
         """
         # Embedding: (batch_size, seq_len, model_dim)
-        x = self.embedding(x)
+        if not self.second_embedding:
+            x = self.embedding(x)
+        else:
+            x = torch.cat(
+                [self.embedding1(x[:, :, 0]), self.embedding2(x[:, :, 1])], dim=-1
+            )
 
         # Pass through each MambaBlock
         for block in self.blocks:
             x = block(x)
 
         # Final projection: (batch_size, seq_len, label_dim)
+        return self.linear(x)
+
+    def step(self, x: torch.Tensor) -> torch.Tensor:
+        # Embedding for the current step
+        x = torch.cat(
+            [self.embedding1(x[:, 0].long()), self.embedding2(x[:, 1].long())], dim=-1
+        )
+
+        # Pass through each MambaBlock step-by-step
+        for block in self.blocks:
+            x = block.step(x)
+
+        # Final projection for the step
         return self.linear(x)

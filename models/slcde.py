@@ -43,7 +43,6 @@ class LinearCDE(nn.Module):
         self,
         input_dim,
         hidden_dim,
-        output_dim,
         sparsity=1.0,
         init_std=1.0,
         diagonal=False,
@@ -52,13 +51,12 @@ class LinearCDE(nn.Module):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
         self.diagonal = diagonal
         self.fwht = fwht
         if self.fwht:
-            self.hadamard = hadamard_matrix(hidden_dim).to(
-                torch.device("cuda")
-            ) / (hidden_dim ** 0.5)
+            self.hadamard = hadamard_matrix(hidden_dim).to(torch.device("cuda")) / (
+                hidden_dim**0.5
+            )
         else:
             self.hadamard = None
 
@@ -68,9 +66,10 @@ class LinearCDE(nn.Module):
             self.vf_A = nn.Linear(input_dim + 1, hidden_dim, bias=False)
         else:
             self.vf_A = nn.Linear(input_dim + 1, hidden_dim * hidden_dim, bias=False)
-            nn.init.normal_(self.vf_A.weight, mean=0.0, std=init_std / (hidden_dim**0.5))
+            nn.init.normal_(
+                self.vf_A.weight, mean=0.0, std=init_std / (hidden_dim**0.5)
+            )
         self.vf_B = nn.Linear(input_dim + 1, hidden_dim, bias=False)
-        # self.linear = nn.Linear(hidden_dim, output_dim, bias=True)
 
         # Apply custom weight initialization
         nn.init.normal_(self.init_layer.weight, mean=0.0, std=init_std)
@@ -147,11 +146,12 @@ class LinearCDE(nn.Module):
             # A for this time step: shape = (batch_size, hidden_dim*hidden_dim)
             A = self.vf_A(inp[:, i])
             if self.diagonal:
-                state_transition = A * y + Bs[:, i - 1]
+                state_transition = (3**0.5) * torch.tanh(A) * y
                 if self.fwht:
                     state_transition = torch.einsum(
                         "ij,bj->bi", self.hadamard, state_transition
                     )
+                state_transition = state_transition + Bs[:, i - 1]
             else:
                 state_transition = (
                     torch.einsum(
@@ -161,11 +161,9 @@ class LinearCDE(nn.Module):
                     )
                     + Bs[:, i - 1]
                 )
-            y = y + state_transition * (1 / seq_len)
+            y = y + state_transition
             ys[:, i] = y
 
-        # Apply final linear layer to each time step: (batch_size, seq_len, output_dim)
-        # return self.linear(ys)
         return ys
 
 
@@ -208,7 +206,6 @@ class LinearCDEBlock(nn.Module):
         self.LCDE = LinearCDE(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
-            output_dim=input_dim,  # for the residual skip
             init_std=init_std,
             sparsity=sparsity,
             diagonal=diagonal,
@@ -285,26 +282,30 @@ class StackedLCDE(nn.Module):
     def __init__(
         self,
         num_blocks: int,
-        hidden_dim: int,
+        model_dim: int,
         data_dim: int,
-        embedding_dim: int,
         label_dim: int,
         init_std: float = 1.0,
         sparsity: float = 1.0,
-        dropout_rate: float = 0.1,
+        dropout_rate: float = 0.01,
         use_glu: bool = False,
         diagonal=False,
         fwht=False,
+        second_embedding=False,
     ):
         super().__init__()
+        self.second_embedding = second_embedding
+        embedding_dim = model_dim // 2 if second_embedding else model_dim
         self.embedding = nn.Embedding(data_dim, embedding_dim)
+        if second_embedding:
+            self.embedding2 = nn.Embedding(data_dim, embedding_dim)
 
         # Build the stack of LCDE blocks
         self.blocks = nn.ModuleList(
             [
                 LinearCDEBlock(
                     input_dim=embedding_dim,
-                    hidden_dim=hidden_dim,
+                    hidden_dim=model_dim,
                     init_std=init_std,
                     sparsity=sparsity,
                     dropout_rate=dropout_rate,

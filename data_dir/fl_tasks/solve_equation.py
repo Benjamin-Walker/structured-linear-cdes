@@ -22,7 +22,7 @@ def generate_sample(min_length, max_length, generator):
     x_position = generator.choice(x_positions)
     eqn_solution = sequence[x_position] - 1
     sequence[x_position] = 12  # Token for 'x' (modulus + 6)
-    sequence += [11, solution, 13]
+    sequence += [solution, 13]
 
     return sequence, eqn_solution
 

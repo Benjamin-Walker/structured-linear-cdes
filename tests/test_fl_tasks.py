@@ -611,27 +611,27 @@ def test_stack_manipulation_preprocess():
     test_cases = [
         (
             (
-                ["ST1", "ST2", "PS3", "POP", "PS4", "POP", "POP", "POP", 10],
+                ["ST1", "ST2", "PS2", "POP", "PS1", "POP", "POP", "POP", 6],
                 [0, 0, 0, 0, 0, 0, 0, 0, "ST1"],
             ),
-            [1, 2, 7, 9, 8, 9, 9, 9, 10],
+            [1, 2, 4, 5, 3, 5, 5, 5, 6],
             [0, 0, 0, 0, 0, 0, 0, 0, 1],
             [0, 0, 0, 0, 0, 0, 0, 0, 1],
         ),
         (
             (
-                ["ST1", "PS2", "PS3", "PS4", 10],
-                [0, 0, 0, 0, "ST1", "ST2", "ST3", "ST4"],
+                ["ST1", "PS2", "PS1", "PS2", 6],
+                [0, 0, 0, 0, "ST1", "ST2", "ST1", "ST2"],
             ),
-            [1, 6, 7, 8, 10],
-            [0, 0, 0, 0, 1, 2, 3, 4],
+            [1, 4, 3, 4, 6],
+            [0, 0, 0, 0, 1, 2, 1, 2],
             [0, 0, 0, 0, 1, 1, 1, 1],
         ),
         (
-            (["ST3", 10], [0, "ST3"]),
-            [3, 10],
-            [0, 3],
-            [0, 3],
+            (["ST2", 10], [0, "ST2"]),
+            [2, 10],
+            [0, 2],
+            [0, 2],
         ),
     ]
 
@@ -639,6 +639,8 @@ def test_stack_manipulation_preprocess():
         input_tensor, target_tensor, mask = preprocess_data_stack_manipulation(sample)
         assert input_tensor.shape == (len(sample[0]),)
         assert target_tensor.shape == (len(sample[1]),)
+        print(input_tensor)
+        print(torch.tensor(expected_input))
         assert (input_tensor == torch.tensor(expected_input)).all()
         assert (target_tensor == torch.tensor(expected_output)).all()
         assert (mask == torch.tensor(expected_mask, dtype=torch.bool)).all()

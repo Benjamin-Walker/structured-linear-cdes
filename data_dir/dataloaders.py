@@ -63,6 +63,97 @@ def create_a5_dataloaders(
     return train_loader, test_loader, data_dim, label_dim
 
 
+class SnakeDataset(Dataset):
+    """
+    Loads a pre-saved .pt containing a list of (x, y, mask) for entire Snake games.
+
+    Each item = (x, y, mask):
+      - x: [seq_len, 2], y: [seq_len], mask: [seq_len]
+    """
+
+    def __init__(self, pt_file):
+        super().__init__()
+        # Load the entire preprocessed list from .pt
+        self.examples = torch.load(pt_file)  # a list of (x, y, mask)
+        # Might define data_dim=400, label_dim=4
+        self.data_dim = 400
+        self.label_dim = 4
+
+    def __len__(self):
+        return len(self.examples)
+
+    def __getitem__(self, idx):
+        return self.examples[idx]
+
+
+def snake_collate_fn(batch):
+    """
+    Collate variable-length sequences, padding them.
+    batch: list of (x, y, mask) for each example (Snake game).
+    Output shape:
+      padded_x: [B, max_seq_len, 2]
+      padded_y: [B, max_seq_len]
+      padded_m: [B, max_seq_len]
+    """
+    xs, ys, masks = zip(*batch)  # each is a (seq_len,2), (seq_len), (seq_len)
+    padded_x = pad_sequence(
+        xs, batch_first=False, padding_value=0
+    )  # => [max_seq_len, B, 2]
+    padded_y = pad_sequence(
+        ys, batch_first=False, padding_value=0
+    )  # => [max_seq_len, B]
+    padded_m = pad_sequence(
+        masks, batch_first=False, padding_value=0
+    )  # => [max_seq_len, B]
+
+    # transpose to get [B, max_seq_len, ...]
+    padded_x = padded_x.transpose(0, 1)  # => [B, max_seq_len, 2]
+    padded_y = padded_y.transpose(0, 1)  # => [B, max_seq_len]
+    padded_m = padded_m.transpose(0, 1)  # => [B, max_seq_len]
+
+    return padded_x, padded_y, padded_m
+
+
+def create_snake_dataloaders(
+    pt_file, train_split=0.8, batch_size=4, seed=1234, shuffle=True
+):
+    """
+    Creates DataLoaders from a .pt that contains a list of (x, y, mask).
+    Returns train_loader, test_loader, data_dim=400, label_dim=4
+    """
+    dataset = SnakeDataset(pt_file)
+    data_dim = dataset.data_dim
+    label_dim = dataset.label_dim
+
+    if train_split < 1.0:
+        train_size = int(train_split * len(dataset))
+        test_size = len(dataset) - train_size
+        train_dataset, test_dataset = random_split(
+            dataset,
+            [train_size, test_size],
+            generator=torch.Generator().manual_seed(seed),
+        )
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            collate_fn=snake_collate_fn,
+        )
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            collate_fn=snake_collate_fn,
+        )
+    else:
+        train_loader = DataLoader(
+            dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=snake_collate_fn
+        )
+        test_loader = None
+
+    return train_loader, test_loader, data_dim, label_dim
+
+
 class FormalLanguageDataset(Dataset):
     def __init__(
         self,
