@@ -53,16 +53,15 @@ class MambaBlock(nn.Module):
 
         # Mamba2 module
         y = self.mamba(x)
+        y = y + x
 
         # Optional: Linear -> GLU
         if self.use_glu:
             # shape: (batch_size, seq_len, 2 * model_dim)
-            y = self.post_linear(y)
+            y_glu = self.post_linear(y)
             # shape: (batch_size, seq_len, model_dim)
-            y = F.glu(y, dim=-1)
-
-        # Residual connection
-        y = y + x
+            y_glu = F.glu(y_glu, dim=-1)
+            y = y + y_glu
 
         # Layer Normalization
         y = self.norm(y)
