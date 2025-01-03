@@ -30,7 +30,7 @@ class LSTM(nn.Module):
             x = self.embedding(x)
         else:
             x = torch.cat(
-                [self.embedding1(x[:, :, 0]), self.embedding2(x[:, :, 1])], dim=-1
+                [self.embedding(x[:, :, 0]), self.embedding2(x[:, :, 1])], dim=-1
             )
         x, _ = self.lstm(x)
         return self.linear(x)

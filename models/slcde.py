@@ -146,7 +146,7 @@ class LinearCDE(nn.Module):
             # A for this time step: shape = (batch_size, hidden_dim*hidden_dim)
             A = self.vf_A(inp[:, i])
             if self.diagonal:
-                state_transition = (3**0.5) * torch.tanh(A) * y
+                state_transition = torch.tanh(A) * y
                 if self.fwht:
                     state_transition = torch.einsum(
                         "ij,bj->bi", self.hadamard, state_transition
@@ -342,7 +342,12 @@ class StackedLCDE(nn.Module):
             torch.Tensor: shape (batch_size, seq_len, label_dim)
         """
         # Step 1: Embedding
-        X = self.embedding(X)  # -> (batch_size, seq_len, embedding_dim)
+        if self.second_embedding:
+            X = torch.cat(
+                [self.embedding(X[:, :, 0]), self.embedding2(X[:, :, 1])], dim=-1
+            )
+        else:
+            X = self.embedding(X)  # -> (batch_size, seq_len, embedding_dim)
 
         # Step 2: Pass through each LCDE block
         for block in self.blocks:

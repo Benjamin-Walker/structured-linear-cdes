@@ -83,18 +83,24 @@ class MambaBlock(nn.Module):
                 batch_size=batch_size, max_seqlen=1
             )
 
-        # Process a single timestep using Mamba2's step
+            # Step through Mamba2
         y, self.conv_state, self.ssm_state = self.mamba.step(
             x, self.conv_state, self.ssm_state
         )
 
-        # Optional GLU stage
-        if self.use_glu:
-            y = F.glu(self.post_linear(y), dim=-1)
+        # Residual connection
+        y = y + x
 
-        # Layer normalization and dropout
-        y = self.norm(y + x)
-        return self.drop(y)
+        # Optional GLU stage with residual skip
+        if self.use_glu:
+            y_glu = F.glu(self.post_linear(y), dim=-1)
+            y = y + y_glu
+
+        # Layer normalization
+        y = self.norm(y)
+
+        # No dropout for inference
+        return y
 
 
 class StackedMamba(nn.Module):
@@ -168,7 +174,7 @@ class StackedMamba(nn.Module):
             x = self.embedding(x)
         else:
             x = torch.cat(
-                [self.embedding1(x[:, :, 0]), self.embedding2(x[:, :, 1])], dim=-1
+                [self.embedding(x[:, :, 0]), self.embedding2(x[:, :, 1])], dim=-1
             )
 
         # Pass through each MambaBlock
@@ -180,11 +186,14 @@ class StackedMamba(nn.Module):
 
     def step(self, x: torch.Tensor) -> torch.Tensor:
         # Embedding for the current step
-        x = torch.cat(
-            [self.embedding1(x[:, 0].long()), self.embedding2(x[:, 1].long())], dim=-1
-        )
+        if self.second_embedding:
+            x = torch.cat(
+                [self.embedding(x[:, 0].long()), self.embedding2(x[:, 1].long())],
+                dim=-1,
+            )
+        else:
+            x = self.embedding(x)
 
-        # Pass through each MambaBlock step-by-step
         for block in self.blocks:
             x = block.step(x)
 
