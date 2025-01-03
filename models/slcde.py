@@ -58,7 +58,7 @@ class LinearCDE(nn.Module):
         if self.fwht:
             self.hadamard = hadamard_matrix(hidden_dim).to(
                 torch.device("cuda")
-            )  # / (hidden_dim ** 0.5)
+            ) / (hidden_dim ** 0.5)
         else:
             self.hadamard = None
 
@@ -68,6 +68,7 @@ class LinearCDE(nn.Module):
             self.vf_A = nn.Linear(input_dim + 1, hidden_dim, bias=False)
         else:
             self.vf_A = nn.Linear(input_dim + 1, hidden_dim * hidden_dim, bias=False)
+            nn.init.normal_(self.vf_A.weight, mean=0.0, std=init_std / (hidden_dim**0.5))
         self.vf_B = nn.Linear(input_dim + 1, hidden_dim, bias=False)
         # self.linear = nn.Linear(hidden_dim, output_dim, bias=True)
 
@@ -75,7 +76,6 @@ class LinearCDE(nn.Module):
         nn.init.normal_(self.init_layer.weight, mean=0.0, std=init_std)
         nn.init.normal_(self.init_layer.bias, mean=0.0, std=init_std)
         # Scaled by sqrt(hidden_dim) to reduce variance
-        nn.init.normal_(self.vf_A.weight, mean=0.0, std=init_std / (hidden_dim**0.5))
         nn.init.normal_(self.vf_B.weight, mean=0.0, std=init_std)
 
         # Register a buffer to store the mask on the same device as the module
@@ -248,13 +248,14 @@ class LinearCDEBlock(nn.Module):
             torch.Tensor: shape (batch_size, seq_len, input_dim)
         """
         ys = self.LCDE(X)  # shape: (batch_size, seq_len, input_dim)
+        ys = ys + X  # residual skip
 
         # Optional GLU (dimension remains input_dim)
         if self.use_glu:
-            ys = self.glu_linear(ys)  # shape: (batch_size, seq_len, 2*input_dim)
-            ys = F.glu(ys, dim=-1)  # shape: (batch_size, seq_len, input_dim)
+            ys_glu = self.glu_linear(ys)  # shape: (batch_size, seq_len, 2*input_dim)
+            ys_glu = F.glu(ys_glu, dim=-1)  # shape: (batch_size, seq_len, input_dim)
+            ys = ys + ys_glu  # residual skip
 
-        ys = ys + X  # residual skip
         ys = self.norm(ys)
         ys = self.drop(ys)  # dropout
 
