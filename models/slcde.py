@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from fast_hadamard_transform.fast_hadamard_transform_interface import hadamard_transform
 
 
 def hadamard_matrix(order):
@@ -53,6 +54,7 @@ class LinearCDE(nn.Module):
         self.hidden_dim = hidden_dim
         self.diagonal = diagonal
         self.fwht = fwht
+
         if self.fwht:
             self.hadamard = hadamard_matrix(hidden_dim).to(torch.device("cuda")) / (
                 hidden_dim**0.5
@@ -148,8 +150,8 @@ class LinearCDE(nn.Module):
             if self.diagonal:
                 state_transition = torch.tanh(A) * y
                 if self.fwht:
-                    state_transition = torch.einsum(
-                        "ij,bj->bi", self.hadamard, state_transition
+                    state_transition = hadamard_transform(
+                        state_transition, scale=1.0 / (self.hidden_dim**0.5)
                     )
                 state_transition = state_transition + Bs[:, i - 1]
             else:
