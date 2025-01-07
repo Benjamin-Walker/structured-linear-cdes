@@ -116,6 +116,8 @@ class StackedMamba(nn.Module):
         dropout_rate (float): Dropout probability for each MambaBlock.
         use_glu (bool): If True, each block will include a Linear->GLU stage
                         that preserves model_dim.
+        second_embedding (bool): If True, the model will expect two input
+                                    token IDs and use two separate embeddings.
     """
 
     def __init__(

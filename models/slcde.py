@@ -28,12 +28,15 @@ class LinearCDE(nn.Module):
 
     Args:
         input_dim (int): Dimensionality of the input features at each time step.
-        hidden_dim (int): Hidden dimension for the recurrent state.
+        hidden_dim (int): Hidden dimension for the recurrent state. If fwht is True,
+                            then hidden_dim must be a power of 2.
         output_dim (int): Dimensionality of the final output for each time step.
         sparsity (float): Probability of keeping a weight (i.e., 1.0 = no sparsity,
                           0.0 = all weights zero).
         init_std (float): Standard deviation for normal initialization. Different
                           layers have different scaled std in this implementation.
+        diagonal (bool): If True, A is a diagonal matrix.
+        fwht (bool): If True, apply then apply FWHt to tanh(A)*y.
 
     Shape:
         - Input: (batch_size, seq_len, input_dim)
@@ -183,10 +186,14 @@ class LinearCDEBlock(nn.Module):
 
     Args:
         input_dim (int): Dimensionality of the input (and thus output) features.
-        hidden_dim (int): Hidden dimension inside the LinearCDE.
+        hidden_dim (int): Hidden dimension inside the LinearCDE. If fwht is True,
+                            then hidden_dim must be a power of 2.
         init_std (float): Standard deviation for weight initialization in LinearCDE.
         sparsity (float): Probability for retaining a weight in vf_A of LinearCDE.
         dropout_rate (float): Dropout probability applied after the residual addition.
+        use_glu (bool): Whether to apply a Linear -> GLU stage after the residual.
+        diagonal (bool): If True, A is a diagonal matrix for each block.
+        fwht (bool): If True, apply FWHt to tanh(A)*y in LinearCDE.
 
     Shape:
         - Input: (batch_size, seq_len, input_dim)
@@ -268,13 +275,18 @@ class StackedLCDE(nn.Module):
 
     Args:
         num_blocks (int): Number of LinearCDEBlocks to stack.
-        hidden_dim (int): Hidden dimension used in each LinearCDEBlock.
+        hidden_dim (int): Hidden dimension used in each LinearCDEBlock. If fwht is True,
+                            then hidden_dim must be a power of 2.
         data_dim (int): Size of the input token (or feature) space if using an embedding.
         embedding_dim (int): Dimensionality of the embeddings.
         label_dim (int): Size of the final output dimension (e.g., number of classes).
         init_std (float): Standard deviation for the initialization in each block.
         sparsity (float): Probability for retaining a weight in vf_A of each block.
         dropout_rate (float): Dropout probability applied in each block after the residual.
+        use_glu (bool): Whether to apply a Linear -> GLU stage after the residual.
+        diagonal (bool): If True, A is a diagonal matrix for each block.
+        fwht (bool): If True, apply FWHt to tanh(A)*y in LinearCDE.
+        second_embedding (bool): If True, expects two input token IDs and uses two embeddings.
 
     Shape:
         - Input: (batch_size, seq_len) if the input is token IDs (for the Embedding).

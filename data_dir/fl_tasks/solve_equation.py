@@ -4,7 +4,7 @@ from data_dir.fl_tasks.mod_arith_w_brack import (
     generate_sample as generate_sample_mod_arith_w_brack,
 )
 
-vocab_size = 14  # Numbers 0-4, '+', '-', '*', '(', ')', '=', 'x', [PAD], [ACT]
+vocab_size = 14  # [PAD], Numbers 0-4, '+', '-', '*', '(', ')', '=', 'x', [ACT]
 
 
 def generate_sample(min_length, max_length, generator):

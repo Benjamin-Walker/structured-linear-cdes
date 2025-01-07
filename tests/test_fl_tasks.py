@@ -639,8 +639,6 @@ def test_stack_manipulation_preprocess():
         input_tensor, target_tensor, mask = preprocess_data_stack_manipulation(sample)
         assert input_tensor.shape == (len(sample[0]),)
         assert target_tensor.shape == (len(sample[1]),)
-        print(input_tensor)
-        print(torch.tensor(expected_input))
         assert (input_tensor == torch.tensor(expected_input)).all()
         assert (target_tensor == torch.tensor(expected_output)).all()
         assert (mask == torch.tensor(expected_mask, dtype=torch.bool)).all()

@@ -41,7 +41,7 @@ def generate_sample(min_length, max_length, generator):
 
     sequence = (
         [f"ST{el}" for el in initial_stack] + operations + [int(vocab_size - 1)]
-    )  # Using [ACT] token as 6
+    )  # Using [ACT] token as the end token
     target_sequence = (
         [0] * (len(sequence) - 1)
         + [f"ST{el}" for el in final_stack]
@@ -59,7 +59,7 @@ def preprocess_data(sample):
         [
             int(token[2:])
             if isinstance(token, str) and token.startswith("ST")
-            else 5
+            else int(vocab_size - 2)
             if token == "POP"
             else (
                 int(token[2:]) + num_elements

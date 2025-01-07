@@ -75,9 +75,9 @@ class SnakeDataset(Dataset):
         super().__init__()
         # Load the entire preprocessed list from .pt
         self.examples = torch.load(pt_file)  # a list of (x, y, mask)
-        # Might define data_dim=400, label_dim=4
-        self.data_dim = 400
-        self.label_dim = 4
+        # data_dim is number of unique items in x
+        self.data_dim = len(torch.unique(self.examples[0][0][:, 0]))
+        self.label_dim = len(torch.unique(self.examples[0][1]))
 
     def __len__(self):
         return len(self.examples)
@@ -96,20 +96,9 @@ def snake_collate_fn(batch):
       padded_m: [B, max_seq_len]
     """
     xs, ys, masks = zip(*batch)  # each is a (seq_len,2), (seq_len), (seq_len)
-    padded_x = pad_sequence(
-        xs, batch_first=False, padding_value=0
-    )  # => [max_seq_len, B, 2]
-    padded_y = pad_sequence(
-        ys, batch_first=False, padding_value=0
-    )  # => [max_seq_len, B]
-    padded_m = pad_sequence(
-        masks, batch_first=False, padding_value=0
-    )  # => [max_seq_len, B]
-
-    # transpose to get [B, max_seq_len, ...]
-    padded_x = padded_x.transpose(0, 1)  # => [B, max_seq_len, 2]
-    padded_y = padded_y.transpose(0, 1)  # => [B, max_seq_len]
-    padded_m = padded_m.transpose(0, 1)  # => [B, max_seq_len]
+    padded_x = pad_sequence(xs, batch_first=True, padding_value=0)
+    padded_y = pad_sequence(ys, batch_first=True, padding_value=0)
+    padded_m = pad_sequence(masks, batch_first=True, padding_value=0)
 
     return padded_x, padded_y, padded_m
 
@@ -119,7 +108,7 @@ def create_snake_dataloaders(
 ):
     """
     Creates DataLoaders from a .pt that contains a list of (x, y, mask).
-    Returns train_loader, test_loader, data_dim=400, label_dim=4
+    Returns train_loader, test_loader, data_dim, label_dim
     """
     dataset = SnakeDataset(pt_file)
     data_dim = dataset.data_dim

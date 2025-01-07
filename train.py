@@ -38,19 +38,26 @@ def train_model(
     final_lr=1e-5,
 ):
     """
-    Trains the model for `num_steps` steps, printing progress every `print_steps`.
+    Trains the model for a specified number of steps, logging progress, and optionally
+    performing early stopping based on validation accuracy.
 
     Args:
+        config (dict): Configuration parameters for training.
+        data_dim (int): Dimensionality of the input data.
+        label_dim (int): Dimensionality of the labels.
+        task (str): Task name (e.g. A5).
+        model_name (str): Name of the model.
         model (nn.Module): The model to be trained.
-        dataloader (dict[str, DataLoader or Iterable]): Must have "train" and "val" keys.
+        dataloader (dict[str, DataLoader or Iterable]): Must contain "train" and "val" keys.
         num_steps (int): Total steps to train.
-        print_steps (int): Frequency of logging to stdout.
-        learning_rate (float): Base LR for training.
-        device (torch.device): CPU or GPU.
-        weight_decay_embedding (float): WD for embedding params.
-        weight_decay_others (float): WD for all other params.
-        warmup_fraction (float): Fraction of total steps for linear warmup.
-        final_lr (float): Final LR for cosine annealing.
+        print_steps (int): Frequency of logging and validation evaluation.
+        learning_rate (float): Base learning rate for training.
+        device (torch.device): Device for computation (CPU or GPU).
+        early_stop_threshold (float, optional): Validation accuracy threshold for early stopping.
+        weight_decay_embedding (float, optional): Weight decay for embedding parameters.
+        weight_decay_others (float, optional): Weight decay for all other parameters.
+        warmup_fraction (float, optional): Fraction of total steps for linear warmup.
+        final_lr (float, optional): Final learning rate for cosine annealing.
 
     Returns:
         model (nn.Module): The trained model.
@@ -190,7 +197,6 @@ def train_model(
                 total_loss = 0
                 model.train()
 
-                # Early stopping example
                 if early_stop:
                     return model, steps, val_accs, True
 
@@ -221,6 +227,7 @@ def run_experiment(config):
     diagonal = config.get("diagonal", False)
     fwht = config.get("fwht", False)
     use_glu = config.get("use_glu", False)
+    second_embedding = config.get("second_embedding", False)
     early_stop_threshold = config.get("early_stop_threshold", 1.0)
     length = config.get("length")
 
@@ -287,6 +294,7 @@ def run_experiment(config):
             data_dim=data_dim,
             label_dim=label_dim,
             use_glu=use_glu,
+            second_embedding=second_embedding,
         )
     elif model_name == "lcde":
         model = StackedLCDE(
@@ -298,6 +306,7 @@ def run_experiment(config):
             use_glu=use_glu,
             diagonal=diagonal,
             fwht=fwht,
+            second_embedding=second_embedding,
         )
     elif model_name == "lstm":
         model = LSTM(
@@ -305,6 +314,7 @@ def run_experiment(config):
             data_dim=data_dim,
             model_dim=model_dim,
             label_dim=label_dim,
+            second_embedding=second_embedding,
         )
     else:
         raise ValueError("Model not recognized. Must be 'mamba', 'lcde', or 'lstm'.")
