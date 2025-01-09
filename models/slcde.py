@@ -1,6 +1,17 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from fast_hadamard_transform.fast_hadamard_transform_interface import hadamard_transform
+
+
+def hadamard_matrix(order):
+    if order & (order - 1) != 0:
+        raise ValueError("Order must be a power of 2 for Sylvester's construction.")
+    if order == 1:
+        return torch.tensor([[1]], dtype=torch.float32)
+
+    H = hadamard_matrix(order // 2)
+    return torch.cat([torch.cat([H, H], dim=1), torch.cat([H, -H], dim=1)], dim=0)
 
 
 class LinearCDE(nn.Module):
@@ -17,43 +28,67 @@ class LinearCDE(nn.Module):
 
     Args:
         input_dim (int): Dimensionality of the input features at each time step.
-        hidden_dim (int): Hidden dimension for the recurrent state.
+        hidden_dim (int): Hidden dimension for the recurrent state. If fwht is True,
+                            then hidden_dim must be a power of 2.
         output_dim (int): Dimensionality of the final output for each time step.
         sparsity (float): Probability of keeping a weight (i.e., 1.0 = no sparsity,
                           0.0 = all weights zero).
         init_std (float): Standard deviation for normal initialization. Different
                           layers have different scaled std in this implementation.
+        diagonal (bool): If True, A is a diagonal matrix.
+        fwht (bool): If True, apply then apply FWHt to tanh(A)*y.
 
     Shape:
         - Input: (batch_size, seq_len, input_dim)
         - Output: (batch_size, seq_len, output_dim)
     """
 
-    def __init__(self, input_dim, hidden_dim, output_dim, sparsity=1.0, init_std=1.0):
+    def __init__(
+        self,
+        input_dim,
+        hidden_dim,
+        sparsity=1.0,
+        init_std=1.0,
+        diagonal=False,
+        fwht=False,
+    ):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
+        self.diagonal = diagonal
+        self.fwht = fwht
+
+        if self.fwht:
+            self.hadamard = hadamard_matrix(hidden_dim).to(torch.device("cuda")) / (
+                hidden_dim**0.5
+            )
+        else:
+            self.hadamard = None
 
         # Define linear layers
         self.init_layer = nn.Linear(input_dim, hidden_dim, bias=True)
-        self.vf_A = nn.Linear(input_dim + 1, hidden_dim * hidden_dim, bias=False)
+        if self.diagonal:
+            self.vf_A = nn.Linear(input_dim + 1, hidden_dim, bias=False)
+        else:
+            self.vf_A = nn.Linear(input_dim + 1, hidden_dim * hidden_dim, bias=False)
+            nn.init.normal_(
+                self.vf_A.weight, mean=0.0, std=init_std / (hidden_dim**0.5)
+            )
         self.vf_B = nn.Linear(input_dim + 1, hidden_dim, bias=False)
-        self.linear = nn.Linear(hidden_dim, output_dim, bias=True)
 
         # Apply custom weight initialization
         nn.init.normal_(self.init_layer.weight, mean=0.0, std=init_std)
         nn.init.normal_(self.init_layer.bias, mean=0.0, std=init_std)
         # Scaled by sqrt(hidden_dim) to reduce variance
-        nn.init.normal_(self.vf_A.weight, mean=0.0, std=init_std / (hidden_dim**0.5))
         nn.init.normal_(self.vf_B.weight, mean=0.0, std=init_std)
 
         # Register a buffer to store the mask on the same device as the module
         self.register_buffer("mask", self._sparse_mask(sparsity))
 
         # Zero out certain weights according to mask (only once at init)
-        with torch.no_grad():
-            self.vf_A.weight *= self.mask
+        if not self.diagonal:
+            with torch.no_grad():
+                self.vf_A.weight *= self.mask
 
     def _sparse_mask(self, sparsity: float) -> torch.Tensor:
         """
@@ -66,22 +101,12 @@ class LinearCDE(nn.Module):
         )
         return mask
 
-    def _diag_mask(self) -> torch.Tensor:
-        """
-        An unused mask function that creates a diagonal mask (1s on the diagonal, 0 elsewhere).
-        Currently not used in this implementation, but kept for potential future experiments.
-        """
-        mask = torch.eye(self.hidden_dim, self.hidden_dim).view(-1)
-        # Repeat and transpose to match [hidden_dim*hidden_dim, input_dim+1] if needed
-        mask = mask.repeat(self.input_dim + 1, 1).T
-        return mask
-
     def mask_grads(self):
         """
         Applies the same mask to the gradients of vf_A.weight to keep them zero.
         This preserves the initially zeroed-out weights.
         """
-        if self.vf_A.weight.grad is not None:
+        if self.vf_A.weight.grad is not None and not self.diagonal:
             self.vf_A.weight.grad *= self.mask
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
@@ -124,13 +149,27 @@ class LinearCDE(nn.Module):
         # Recurrently compute the hidden states
         for i in range(1, seq_len):
             # A for this time step: shape = (batch_size, hidden_dim*hidden_dim)
-            A = self.vf_A(inp[:, i]).view(-1, self.hidden_dim, self.hidden_dim)
-            # y + A@y + B
-            y = y + torch.einsum("bij,bj->bi", A, y) + Bs[:, i - 1]
+            A = self.vf_A(inp[:, i])
+            if self.diagonal:
+                state_transition = torch.tanh(A) * y
+                if self.fwht:
+                    state_transition = hadamard_transform(
+                        state_transition, scale=1.0 / (self.hidden_dim**0.5)
+                    )
+                state_transition = state_transition + Bs[:, i - 1]
+            else:
+                state_transition = (
+                    torch.einsum(
+                        "bij,bj->bi",
+                        A.view(-1, self.hidden_dim, self.hidden_dim),
+                        y,
+                    )
+                    + Bs[:, i - 1]
+                )
+            y = y + state_transition
             ys[:, i] = y
 
-        # Apply final linear layer to each time step: (batch_size, seq_len, output_dim)
-        return self.linear(ys)
+        return ys
 
 
 class LinearCDEBlock(nn.Module):
@@ -147,10 +186,14 @@ class LinearCDEBlock(nn.Module):
 
     Args:
         input_dim (int): Dimensionality of the input (and thus output) features.
-        hidden_dim (int): Hidden dimension inside the LinearCDE.
+        hidden_dim (int): Hidden dimension inside the LinearCDE. If fwht is True,
+                            then hidden_dim must be a power of 2.
         init_std (float): Standard deviation for weight initialization in LinearCDE.
         sparsity (float): Probability for retaining a weight in vf_A of LinearCDE.
         dropout_rate (float): Dropout probability applied after the residual addition.
+        use_glu (bool): Whether to apply a Linear -> GLU stage after the residual.
+        diagonal (bool): If True, A is a diagonal matrix for each block.
+        fwht (bool): If True, apply FWHt to tanh(A)*y in LinearCDE.
 
     Shape:
         - Input: (batch_size, seq_len, input_dim)
@@ -165,14 +208,17 @@ class LinearCDEBlock(nn.Module):
         sparsity=1.0,
         dropout_rate=0.1,
         use_glu: bool = False,
+        diagonal=False,
+        fwht=False,
     ):
         super().__init__()
         self.LCDE = LinearCDE(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
-            output_dim=input_dim,  # for the residual skip
             init_std=init_std,
             sparsity=sparsity,
+            diagonal=diagonal,
+            fwht=fwht,
         )
         self.norm = nn.LayerNorm(input_dim)
 
@@ -195,10 +241,11 @@ class LinearCDEBlock(nn.Module):
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         """
         Forward pass:
-            1. Normalize input
-            2. Compute LCDE on normalized input
+            1. Compute LCDE on input
+            2. Optionally apply GLU
             3. Add residual skip connection
-            4. Dropout
+            4. LayerNorm
+            5. Dropout
 
         Args:
             X (torch.Tensor): shape (batch_size, seq_len, input_dim)
@@ -206,16 +253,18 @@ class LinearCDEBlock(nn.Module):
         Returns:
             torch.Tensor: shape (batch_size, seq_len, input_dim)
         """
-        norm_X = self.norm(X)
-        ys = self.LCDE(norm_X)  # shape: (batch_size, seq_len, input_dim)
+        ys = self.LCDE(X)  # shape: (batch_size, seq_len, input_dim)
         ys = ys + X  # residual skip
 
         # Optional GLU (dimension remains input_dim)
         if self.use_glu:
-            ys = self.glu_linear(ys)  # shape: (batch_size, seq_len, 2*input_dim)
-            ys = F.glu(ys, dim=-1)  # shape: (batch_size, seq_len, input_dim)
+            ys_glu = self.glu_linear(ys)  # shape: (batch_size, seq_len, 2*input_dim)
+            ys_glu = F.glu(ys_glu, dim=-1)  # shape: (batch_size, seq_len, input_dim)
+            ys = ys + ys_glu  # residual skip
 
+        ys = self.norm(ys)
         ys = self.drop(ys)  # dropout
+
         return ys
 
 
@@ -226,13 +275,18 @@ class StackedLCDE(nn.Module):
 
     Args:
         num_blocks (int): Number of LinearCDEBlocks to stack.
-        hidden_dim (int): Hidden dimension used in each LinearCDEBlock.
+        hidden_dim (int): Hidden dimension used in each LinearCDEBlock. If fwht is True,
+                            then hidden_dim must be a power of 2.
         data_dim (int): Size of the input token (or feature) space if using an embedding.
         embedding_dim (int): Dimensionality of the embeddings.
         label_dim (int): Size of the final output dimension (e.g., number of classes).
         init_std (float): Standard deviation for the initialization in each block.
         sparsity (float): Probability for retaining a weight in vf_A of each block.
         dropout_rate (float): Dropout probability applied in each block after the residual.
+        use_glu (bool): Whether to apply a Linear -> GLU stage after the residual.
+        diagonal (bool): If True, A is a diagonal matrix for each block.
+        fwht (bool): If True, apply FWHt to tanh(A)*y in LinearCDE.
+        second_embedding (bool): If True, expects two input token IDs and uses two embeddings.
 
     Shape:
         - Input: (batch_size, seq_len) if the input is token IDs (for the Embedding).
@@ -242,28 +296,36 @@ class StackedLCDE(nn.Module):
     def __init__(
         self,
         num_blocks: int,
-        hidden_dim: int,
+        model_dim: int,
         data_dim: int,
-        embedding_dim: int,
         label_dim: int,
         init_std: float = 1.0,
         sparsity: float = 1.0,
-        dropout_rate: float = 0.1,
+        dropout_rate: float = 0.01,
         use_glu: bool = False,
+        diagonal=False,
+        fwht=False,
+        second_embedding=False,
     ):
         super().__init__()
+        self.second_embedding = second_embedding
+        embedding_dim = model_dim // 2 if second_embedding else model_dim
         self.embedding = nn.Embedding(data_dim, embedding_dim)
+        if second_embedding:
+            self.embedding2 = nn.Embedding(data_dim, embedding_dim)
 
         # Build the stack of LCDE blocks
         self.blocks = nn.ModuleList(
             [
                 LinearCDEBlock(
                     input_dim=embedding_dim,
-                    hidden_dim=hidden_dim,
+                    hidden_dim=model_dim,
                     init_std=init_std,
                     sparsity=sparsity,
                     dropout_rate=dropout_rate,
                     use_glu=use_glu,
+                    diagonal=diagonal,
+                    fwht=fwht,
                 )
                 for _ in range(num_blocks)
             ]
@@ -294,7 +356,12 @@ class StackedLCDE(nn.Module):
             torch.Tensor: shape (batch_size, seq_len, label_dim)
         """
         # Step 1: Embedding
-        X = self.embedding(X)  # -> (batch_size, seq_len, embedding_dim)
+        if self.second_embedding:
+            X = torch.cat(
+                [self.embedding(X[:, :, 0]), self.embedding2(X[:, :, 1])], dim=-1
+            )
+        else:
+            X = self.embedding(X)  # -> (batch_size, seq_len, embedding_dim)
 
         # Step 2: Pass through each LCDE block
         for block in self.blocks:

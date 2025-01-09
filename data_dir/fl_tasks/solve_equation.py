@@ -4,7 +4,7 @@ from data_dir.fl_tasks.mod_arith_w_brack import (
     generate_sample as generate_sample_mod_arith_w_brack,
 )
 
-vocab_size = 14  # Numbers 0-4, '+', '-', '*', '(', ')', '=', 'x', [PAD], [ACT]
+vocab_size = 14  # [PAD], Numbers 0-4, '+', '-', '*', '(', ')', '=', 'x', [ACT]
 
 
 def generate_sample(min_length, max_length, generator):
@@ -21,8 +21,8 @@ def generate_sample(min_length, max_length, generator):
     x_positions = [i for i, token in enumerate(sequence) if token < 6]
     x_position = generator.choice(x_positions)
     eqn_solution = sequence[x_position] - 1
-    sequence[x_position] = 12  # Token for 'x' (modulus + 6)
-    sequence += [11, solution, 13]
+    sequence[x_position] = 12  # Token for 'x' (modulus + 7)
+    sequence += [solution, 13]
 
     return sequence, eqn_solution
 
