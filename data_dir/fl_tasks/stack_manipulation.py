@@ -1,7 +1,7 @@
 import torch
 
 num_elements = 2  # Number of unique stack elements
-vocab_size = num_elements * 2 + 3
+vocab_size = num_elements * 2 + 4  # padding, states, push actions, pop, empty list, act
 
 
 def generate_sample(min_length, max_length, generator):
@@ -34,7 +34,7 @@ def generate_sample(min_length, max_length, generator):
         if action == 0:
             if final_stack:
                 final_stack.pop()
-                operations.append("POP")
+            operations.append("POP")
         else:
             final_stack.append(action)
             operations.append(f"PS{action}")
@@ -44,8 +44,8 @@ def generate_sample(min_length, max_length, generator):
     )  # Using [ACT] token as the end token
     target_sequence = (
         [0] * (len(sequence) - 1)
-        + [f"ST{el}" for el in final_stack]
-        + [0] * (length // 2 - len(final_stack))
+        + (["EMPTY"] if not final_stack else [f"ST{el}" for el in final_stack])
+        + [0] * (length // 2 - max(1, len(final_stack)))
     )
 
     return sequence, target_sequence
@@ -59,7 +59,7 @@ def preprocess_data(sample):
         [
             int(token[2:])
             if isinstance(token, str) and token.startswith("ST")
-            else int(vocab_size - 2)
+            else int(num_elements * 2 + 1)
             if token == "POP"
             else (
                 int(token[2:]) + num_elements
@@ -72,13 +72,19 @@ def preprocess_data(sample):
     )
 
     target_tensor = torch.tensor(
-        [int(token[2:]) if isinstance(token, str) else 0 for token in target_sequence],
+        [
+            num_elements * 2 + 2
+            if token == "EMPTY"
+            else int(token[2:])
+            if isinstance(token, str)
+            else 0
+            for token in target_sequence
+        ],
         dtype=torch.long,
     )
 
-    num_nonzero = (target_tensor != 0).sum().item()
-
     mask = torch.zeros(target_tensor.shape, dtype=torch.bool)
-    mask[-num_nonzero:] = True
+    ind = torch.argmax((target_tensor != 0).to(dtype=torch.int), dim=-1)
+    mask[ind:] = True
 
     return input_tensor, target_tensor, mask

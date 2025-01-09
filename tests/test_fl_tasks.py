@@ -577,12 +577,14 @@ def test_reverse_string_preprocess():
 
 
 def test_stack_manipulation_generate():
+    num_elements = 2
     for i in range(1000):
         sample = generate_sample_stack_manipulation(3, 10, random.Random(i))
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
         assert isinstance(sample[1], list)
+        assert len(sample[0]) == len(sample[1]) / 2 + 1
         assert 2 <= len(sample[0]) <= 6
         assert 4 <= len(sample[1]) <= 10
         stack = []
@@ -591,11 +593,25 @@ def test_stack_manipulation_generate():
                 break
             if token.startswith("ST"):
                 stack.append(int(token[2:]))
-            elif token == "POP":
+            elif token == "POP" and stack:
                 stack.pop()
             elif token.startswith("PS"):
                 stack.append(int(token[2:]))
-        pred_stack = [int(token[2:]) for token in sample[1] if isinstance(token, str)]
+
+        stack = (
+            [0] * (len(sample[0]) - 1)
+            + ([num_elements * 2 + 2] if not stack else stack)
+            + [0] * (len(sample[0]) - 1 - max(1, len(stack)))
+        )
+
+        pred_stack = [
+            num_elements * 2 + 2
+            if token == "EMPTY"
+            else int(token[2:])
+            if isinstance(token, str)
+            else 0
+            for token in sample[1]
+        ]
         assert stack == pred_stack
 
     sample = generate_sample_stack_manipulation(3, 3, random.Random(0))
@@ -608,30 +624,32 @@ def test_stack_manipulation_generate():
 
 
 def test_stack_manipulation_preprocess():
+    num_elements = 2
+    act_token = num_elements * 2 + 3
     test_cases = [
         (
             (
-                ["ST1", "ST2", "PS2", "POP", "PS1", "POP", "POP", "POP", 6],
-                [0, 0, 0, 0, 0, 0, 0, 0, "ST1"],
+                ["ST1", "ST2", "PS2", "POP", "PS1", "POP", "POP", "POP", act_token],
+                [0, 0, 0, 0, 0, 0, 0, 0, "EMPTY", 0, 0, 0, 0, 0, 0, 0],
             ),
-            [1, 2, 4, 5, 3, 5, 5, 5, 6],
-            [0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 2, 4, 5, 3, 5, 5, 5, act_token],
+            [0, 0, 0, 0, 0, 0, 0, 0, num_elements * 2 + 2, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
         ),
         (
             (
-                ["ST1", "PS2", "PS1", "PS2", 6],
-                [0, 0, 0, 0, "ST1", "ST2", "ST1", "ST2"],
+                ["ST1", "PS2", "PS1", "POP", act_token],
+                [0, 0, 0, 0, "ST1", "ST2", 0, 0],
             ),
-            [1, 4, 3, 4, 6],
-            [0, 0, 0, 0, 1, 2, 1, 2],
+            [1, 4, 3, 5, act_token],
+            [0, 0, 0, 0, 1, 2, 0, 0],
             [0, 0, 0, 0, 1, 1, 1, 1],
         ),
         (
-            (["ST2", 10], [0, "ST2"]),
-            [2, 10],
-            [0, 2],
-            [0, 2],
+            (["ST2", "PS1", act_token], [0, 0, "ST2", "ST1"]),
+            [2, 3, act_token],
+            [0, 0, 2, 1],
+            [0, 0, 1, 1],
         ),
     ]
 
@@ -896,3 +914,6 @@ def test_preprocess_data_solve_equation():
         assert (
             mask == expected_mask_tensor
         ).all(), f"Expected mask {expected_mask.tolist()}, got {mask.tolist()}."
+
+
+test_stack_manipulation_preprocess()
