@@ -4,7 +4,13 @@ import torch.nn as nn
 
 class LSTM(nn.Module):
     def __init__(
-        self, num_blocks, data_dim, model_dim, label_dim, second_embedding=False
+        self,
+        num_blocks,
+        data_dim,
+        model_dim,
+        label_dim,
+        dropout_rate,
+        second_embedding=False,
     ):
         super(LSTM, self).__init__()
         self.second_embedding = second_embedding
@@ -17,7 +23,7 @@ class LSTM(nn.Module):
             model_dim,
             num_layers=num_blocks,
             batch_first=True,
-            dropout=0.1,
+            dropout=dropout_rate,
             bidirectional=False,
         )
         self.linear = nn.Linear(model_dim, label_dim)
