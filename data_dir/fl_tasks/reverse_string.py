@@ -16,7 +16,7 @@ def generate_sample(min_length, max_length, generator):
 
     sequence = [generator.randint(1, vocab_size - 2) for _ in range(length // 2)]
     target_sequence = sequence + sequence[::-1]
-    sequence += [11]
+    sequence += [3]
 
     return sequence, target_sequence
 
