@@ -68,7 +68,7 @@ class LinearCDE(nn.Module):
         # Define linear layers
         self.init_layer = nn.Linear(input_dim, hidden_dim, bias=True)
         if self.diagonal:
-            self.vf_A = nn.Linear(input_dim + 1, hidden_dim, bias=False)
+            self.vf_A = torch.nn.Parameter(torch.randn(input_dim + 1, hidden_dim))
         else:
             self.vf_A = nn.Linear(input_dim + 1, hidden_dim * hidden_dim, bias=False)
             nn.init.normal_(
@@ -106,8 +106,9 @@ class LinearCDE(nn.Module):
         Applies the same mask to the gradients of vf_A.weight to keep them zero.
         This preserves the initially zeroed-out weights.
         """
-        if self.vf_A.weight.grad is not None and not self.diagonal:
-            self.vf_A.weight.grad *= self.mask
+        if not self.diagonal:
+            if self.vf_A.weight.grad is not None:
+                self.vf_A.weight.grad *= self.mask
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         """
@@ -132,7 +133,9 @@ class LinearCDE(nn.Module):
 
         # Add increments of time as first channel
         ts = torch.full((batch_size, seq_len, 1), 1.0 / (seq_len - 1), device=X.device)
-        inp = torch.cat((ts, X), dim=-1)  # shape: (batch_size, seq_len, input_dim+1)
+        inp = torch.cat(
+            (ts, X * 1.0 / (seq_len - 1)), dim=-1
+        )  # shape: (batch_size, seq_len, input_dim+1)
 
         # Initialize the hidden state
         x0 = X[:, 0, :]  # shape: (batch_size, input_dim)
@@ -148,16 +151,17 @@ class LinearCDE(nn.Module):
 
         # Recurrently compute the hidden states
         for i in range(1, seq_len):
-            # A for this time step: shape = (batch_size, hidden_dim*hidden_dim)
-            A = self.vf_A(inp[:, i])
             if self.diagonal:
-                state_transition = torch.tanh(A) * y
+                state_transition = (
+                    torch.einsum("ij,bi->bj", torch.tanh(self.vf_A), inp[:, i]) * y
+                )
                 if self.fwht:
                     state_transition = hadamard_transform(
                         state_transition, scale=1.0 / (self.hidden_dim**0.5)
                     )
                 state_transition = state_transition + Bs[:, i - 1]
             else:
+                A = self.vf_A(inp[:, i])
                 state_transition = (
                     torch.einsum(
                         "bij,bj->bi",
