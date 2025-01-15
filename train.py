@@ -235,6 +235,7 @@ def run_experiment(config):
 
     # Create DataLoader(s)
     if task == "A5":
+        padding_length = length
         train_dataloader, val_dataloader, data_dim, label_dim = create_a5_dataloaders(
             length=length, train_split=0.8, batch_size=batch_size
         )
@@ -263,6 +264,7 @@ def run_experiment(config):
 
         dataloader = {"train": train_dataloader, "val": val_dataloader}
     else:
+        padding_length = 256
         # Formal language tasks, e.g. "majority"
         train_dataloader, _, data_dim, label_dim = create_fl_dataloaders(
             task,
@@ -270,7 +272,7 @@ def run_experiment(config):
             batch_size=batch_size,
             min_length=3,
             max_length=40,
-            padding_length=256,
+            padding_length=padding_length,
             train_split=1.0,
             seed=1234,
         )
@@ -280,7 +282,7 @@ def run_experiment(config):
             batch_size=batch_size,
             min_length=40,
             max_length=256,
-            padding_length=256,
+            padding_length=padding_length,
             train_split=1.0,
             seed=2345,
         )
@@ -336,7 +338,7 @@ def run_experiment(config):
             label_dim=label_dim,
             dropout_rate=dropout_rate,
             second_embedding=second_embedding,
-            context_length=260,
+            context_length=padding_length,
         )
     else:
         raise ValueError(
