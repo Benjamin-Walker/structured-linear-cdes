@@ -14,9 +14,6 @@ from data_dir.dataloaders import (
     create_snake_dataloaders,
 )
 from models.lr_scheduler import LinearWarmupCosineAnnealing
-from models.lstm import LSTM
-from models.mamba import StackedMamba
-from models.slcde import StackedLCDE
 
 
 def train_model(
@@ -229,12 +226,16 @@ def run_experiment(config):
     use_glu = config.get("use_glu", False)
     second_embedding = config.get("second_embedding", False)
     early_stop_threshold = config.get("early_stop_threshold", 1.0)
+    init_std = config.get("init_std", 1.0)
+    sparsity = config.get("sparsity", 1.0)
+    dropout_rate = config.get("dropout_rate", 0.01)
     length = config.get("length")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Create DataLoader(s)
     if task == "A5":
+        padding_length = length
         train_dataloader, val_dataloader, data_dim, label_dim = create_a5_dataloaders(
             length=length, train_split=0.8, batch_size=batch_size
         )
@@ -263,6 +264,7 @@ def run_experiment(config):
 
         dataloader = {"train": train_dataloader, "val": val_dataloader}
     else:
+        padding_length = 256
         # Formal language tasks, e.g. "majority"
         train_dataloader, _, data_dim, label_dim = create_fl_dataloaders(
             task,
@@ -270,7 +272,7 @@ def run_experiment(config):
             batch_size=batch_size,
             min_length=3,
             max_length=40,
-            padding_length=260,
+            padding_length=padding_length,
             train_split=1.0,
             seed=1234,
         )
@@ -280,7 +282,7 @@ def run_experiment(config):
             batch_size=batch_size,
             min_length=40,
             max_length=256,
-            padding_length=260,
+            padding_length=padding_length,
             train_split=1.0,
             seed=2345,
         )
@@ -288,36 +290,60 @@ def run_experiment(config):
 
     # Create the model
     if model_name == "mamba":
+        from models.mamba import StackedMamba
+
         model = StackedMamba(
             num_blocks=num_blocks,
             model_dim=model_dim,
             data_dim=data_dim,
             label_dim=label_dim,
+            dropout_rate=dropout_rate,
             use_glu=use_glu,
             second_embedding=second_embedding,
         )
     elif model_name == "lcde":
+        from models.slcde import StackedLCDE
+
         model = StackedLCDE(
             num_blocks=num_blocks,
             model_dim=model_dim,
             data_dim=data_dim,
             label_dim=label_dim,
-            init_std=1.0,
+            init_std=init_std,
+            sparsity=sparsity,
+            dropout_rate=dropout_rate,
             use_glu=use_glu,
             diagonal=diagonal,
             fwht=fwht,
             second_embedding=second_embedding,
         )
     elif model_name == "lstm":
+        from models.lstm import LSTM
+
         model = LSTM(
             num_blocks=num_blocks,
             data_dim=data_dim,
             model_dim=model_dim,
             label_dim=label_dim,
+            dropout_rate=dropout_rate,
             second_embedding=second_embedding,
         )
+    elif model_name == "xlstm":
+        from models.xlstm import xLSTM
+
+        model = xLSTM(
+            num_blocks=num_blocks,
+            data_dim=data_dim,
+            model_dim=model_dim,
+            label_dim=label_dim,
+            dropout_rate=dropout_rate,
+            second_embedding=second_embedding,
+            context_length=padding_length,
+        )
     else:
-        raise ValueError("Model not recognized. Must be 'mamba', 'lcde', or 'lstm'.")
+        raise ValueError(
+            "Model not recognized. Must be 'mamba', 'lcde', 'lstm', or 'xlstm'."
+        )
 
     pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Number of trainable parameters: {pytorch_total_params}")
