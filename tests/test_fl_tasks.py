@@ -992,7 +992,7 @@ def test_binary_addition_preprocess():
 
 
 def test_binary_multiplication_generate():
-    vocab_size = 4
+    vocab_size = 5
 
     for i in range(1000):
         sample = generate_sample_binary_multiplication(3, 10, random.Random(i))
@@ -1002,6 +1002,7 @@ def test_binary_multiplication_generate():
         assert isinstance(sample[1], list)
         assert 4 <= len(sample[0]) <= 6
         assert vocab_size - 1 in sample[0]
+        assert vocab_size - 2 in sample[0]
 
     sample = generate_sample_binary_multiplication(5, 5, random.Random(0))
     assert len(sample[1]) == 6
@@ -1032,7 +1033,7 @@ def test_binary_multiplication_preprocess():
 
 
 def test_binary_compute_sqrt_generate():
-    vocab_size = 5
+    vocab_size = 4
 
     for i in range(1000):
         sample = generate_sample_compute_sqrt(5, 10, random.Random(i))
@@ -1042,7 +1043,6 @@ def test_binary_compute_sqrt_generate():
         assert isinstance(sample[1], list)
         assert 3 <= len(sample[0]) <= 8
         assert vocab_size - 1 in sample[0]
-        assert vocab_size - 2 in sample[0]
 
     sample = generate_sample_compute_sqrt(6, 6, random.Random(0))
     assert len(sample[1]) == 7
