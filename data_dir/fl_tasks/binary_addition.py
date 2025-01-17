@@ -1,3 +1,5 @@
+import warnings
+
 import torch
 
 vocab_size = 5
@@ -37,10 +39,16 @@ def binary_add(sequence):
 
 
 def generate_sample(min_length, max_length, generator):
-    """Generates a single sample for the Binary (little-Endian) Addtion task."""
+    """Generates a single sample for the Binary (little-Endian) Addition task."""
 
     if min_length > max_length:
         raise ValueError("min_length must be less than or equal to max_length")
+
+    if min_length < 5:
+        min_length = max(5, min_length)
+        warnings.warn(
+            "sequence for binary addition must be at least 5, max(5, min_length) applied"
+        )
 
     length = generator.randint(min_length, max_length)
 
