@@ -1,23 +1,31 @@
 import torch
 
-vocab_size = 11
+num_elements = 5
+vocab_size = num_elements + 2
 
 
 def generate_sample(min_length, max_length, generator):
     """Generates a single sample for the Bucket Sort task."""
+
+    if min_length > max_length:
+        raise ValueError("min_length must be less than or equal to max_length")
+
     length = generator.randint(min_length, max_length)
-    data = [generator.randint(1, vocab_size - 2) for _ in range(length // 2)]
-    target = sorted(data)
-    data += [10]
+    if length % 2 == 1:
+        length += 1
+
+    data = [generator.randint(1, num_elements) for _ in range(length // 2)]
+    target = [0] * (length // 2) + sorted(data)
+    data.append(vocab_size - 1)
     return data, target
 
 
 def preprocess_data(sample):
     """Preprocess function for the 'bucket_sort' task."""
+
     data, target = sample
     input_tensor = torch.tensor(data, dtype=torch.long)
-    target_tensor = torch.zeros(2 * (input_tensor.shape[0] - 1), dtype=torch.long)
-    target_tensor[input_tensor.shape[0] - 1 :] = torch.tensor(target, dtype=torch.long)
-    mask = torch.zeros(2 * (input_tensor.shape[0] - 1), dtype=torch.bool)
-    mask[input_tensor.shape[0] - 1 :] = True
+    target_tensor = torch.tensor(target, dtype=torch.long)
+    mask = torch.zeros(target_tensor.shape, dtype=torch.bool)
+    mask[len(data) - 1 :] = True
     return input_tensor, target_tensor, mask
