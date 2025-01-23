@@ -180,9 +180,7 @@ class LinearCDE(nn.Module):
                         ).view(-1, self.hidden_dim)
                     else:
                         state_transition = (inp[:, i] @ self.vf_A) * y
-                    state_transition = (
-                        10e6 * torch.tanh(state_transition / 10e6) + Bs[:, i - 1]
-                    )
+                    state_transition = state_transition + Bs[:, i - 1]
             else:
                 A = self.vf_A(inp[:, i])
                 state_transition = (
@@ -193,7 +191,7 @@ class LinearCDE(nn.Module):
                     )
                     + Bs[:, i - 1]
                 )
-            y = y + state_transition
+            y = y + 10e6 * torch.tanh(state_transition / 10e6)
             ys[:, i] = y
 
         return ys
