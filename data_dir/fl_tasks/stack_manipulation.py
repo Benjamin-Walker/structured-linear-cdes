@@ -4,27 +4,32 @@ num_elements = 2  # Number of unique stack elements
 vocab_size = num_elements * 2 + 4  # padding, states, push actions, pop, empty list, act
 
 
-def generate_sample(min_length, max_length, generator):
+def generate_sample(min_length, max_length, seed=None):
     """Generates a single sample for the Stack Manipulation task."""
+
+    # Set the seed if provided
+    if seed is not None:
+        torch.manual_seed(seed)
 
     if min_length > max_length:
         raise ValueError("min_length must be less than or equal to max_length")
 
-    length = generator.randint(min_length, max_length)
+    length = torch.randint(min_length, max_length + 1, (1,)).item()
 
     # length gives the total length of target_sequence
     if length % 2 == 1:
         length += 1
 
     # Initialize the stack content and the actions
-    initial_stack_length = generator.randint(1, length // 2)
+    initial_stack_length = torch.randint(1, length // 2 + 1, (1,)).item()
     initial_stack = [
-        generator.randint(1, num_elements) for _ in range(initial_stack_length)
+        torch.randint(1, num_elements + 1, (1,)).item()
+        for _ in range(initial_stack_length)
     ]
     final_stack = initial_stack.copy()
 
     actions = [
-        generator.randint(0, num_elements)
+        torch.randint(0, num_elements + 1, (1,)).item()
         for _ in range(length // 2 - initial_stack_length)
     ]
 

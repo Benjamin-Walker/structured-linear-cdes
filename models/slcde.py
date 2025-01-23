@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from fast_hadamard_transform.fast_hadamard_transform_interface import hadamard_transform
 
 
@@ -35,6 +34,7 @@ class LinearCDE(nn.Module):
                           0.0 = all weights zero).
         init_std (float): Standard deviation for normal initialization. Different
                           layers have different scaled std in this implementation.
+        block_size (int): The size of the blocks along the diagonal of A.
         diagonal (bool): If True, A is a diagonal matrix.
         fwht (bool): If True, apply then apply FWHt to tanh(A)*y.
 
@@ -49,6 +49,7 @@ class LinearCDE(nn.Module):
         hidden_dim,
         sparsity=1.0,
         init_std=1.0,
+        block_size=1,
         diagonal=False,
         fwht=False,
     ):
@@ -67,8 +68,11 @@ class LinearCDE(nn.Module):
 
         # Define linear layers
         self.init_layer = nn.Linear(input_dim, hidden_dim, bias=True)
+        self.block_size = block_size
         if self.diagonal:
-            self.vf_A = torch.nn.Parameter(torch.randn(input_dim + 1, hidden_dim))
+            self.vf_A = torch.nn.Parameter(
+                torch.randn(input_dim + 1, hidden_dim * self.block_size)
+            )
         else:
             self.vf_A = nn.Linear(input_dim + 1, hidden_dim * hidden_dim, bias=False)
             nn.init.normal_(
@@ -152,14 +156,33 @@ class LinearCDE(nn.Module):
         # Recurrently compute the hidden states
         for i in range(1, seq_len):
             if self.diagonal:
-                state_transition = (
-                    torch.einsum("ij,bi->bj", torch.tanh(self.vf_A), inp[:, i]) * y
-                )
                 if self.fwht:
+                    state_transition = (inp[:, i] @ torch.tanh(self.vf_A)) * y
                     state_transition = hadamard_transform(
                         state_transition, scale=1.0 / (self.hidden_dim**0.5)
                     )
-                state_transition = state_transition + Bs[:, i - 1]
+                else:
+                    if self.block_size > 1:
+                        state_transition = (inp[:, i] @ self.vf_A).view(
+                            -1,
+                            self.hidden_dim // self.block_size,
+                            self.block_size,
+                            self.block_size,
+                        )
+                        state_transition = (
+                            state_transition
+                            @ y.view(
+                                -1,
+                                self.hidden_dim // self.block_size,
+                                self.block_size,
+                                1,
+                            )
+                        ).view(-1, self.hidden_dim)
+                    else:
+                        state_transition = (inp[:, i] @ self.vf_A) * y
+                    state_transition = (
+                        10e6 * torch.tanh(state_transition / 10e6) + Bs[:, i - 1]
+                    )
             else:
                 A = self.vf_A(inp[:, i])
                 state_transition = (
@@ -211,6 +234,7 @@ class LinearCDEBlock(nn.Module):
         init_std=1.0,
         sparsity=1.0,
         dropout_rate=0.1,
+        block_size=1,
         use_glu: bool = False,
         diagonal=False,
         fwht=False,
@@ -220,6 +244,7 @@ class LinearCDEBlock(nn.Module):
             input_dim=input_dim,
             hidden_dim=hidden_dim,
             init_std=init_std,
+            block_size=block_size,
             sparsity=sparsity,
             diagonal=diagonal,
             fwht=fwht,
@@ -230,9 +255,11 @@ class LinearCDEBlock(nn.Module):
         self.use_glu = use_glu
         if self.use_glu:
             # Expand from input_dim -> 2*input_dim for GLU gating
-            self.glu_linear = nn.Linear(input_dim, 2 * input_dim)
+            self.linear = nn.Linear(input_dim, 2 * input_dim)
+            self.act = nn.GLU(dim=-1)
         else:
-            self.glu_linear = None
+            self.linear = nn.Linear(input_dim, input_dim)
+            self.act = lambda x: torch.tanh(x)
 
         self.drop = nn.Dropout(p=dropout_rate)
 
@@ -261,10 +288,9 @@ class LinearCDEBlock(nn.Module):
         ys = ys + X  # residual skip
 
         # Optional GLU (dimension remains input_dim)
-        if self.use_glu:
-            ys_glu = self.glu_linear(ys)  # shape: (batch_size, seq_len, 2*input_dim)
-            ys_glu = F.glu(ys_glu, dim=-1)  # shape: (batch_size, seq_len, input_dim)
-            ys = ys + ys_glu  # residual skip
+        ys_lin = self.linear(ys)  # shape: (batch_size, seq_len, 2*input_dim)
+        ys_lin = self.act(ys_lin)  # shape: (batch_size, seq_len, input_dim)
+        ys = ys + ys_lin  # residual skip
 
         ys = self.norm(ys)
         ys = self.drop(ys)  # dropout
@@ -304,6 +330,7 @@ class StackedLCDE(nn.Module):
         data_dim: int,
         label_dim: int,
         init_std: float = 1.0,
+        block_size: int = 1,
         sparsity: float = 1.0,
         dropout_rate: float = 0.01,
         use_glu: bool = False,
@@ -325,6 +352,7 @@ class StackedLCDE(nn.Module):
                     input_dim=embedding_dim,
                     hidden_dim=model_dim,
                     init_std=init_std,
+                    block_size=block_size,
                     sparsity=sparsity,
                     dropout_rate=dropout_rate,
                     use_glu=use_glu,

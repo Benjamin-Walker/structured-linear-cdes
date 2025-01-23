@@ -4,13 +4,17 @@ modulus = 5
 vocab_size = modulus + 5
 
 
-def generate_sample(min_length, max_length, generator):
+def generate_sample(min_length, max_length, seed=None):
     """Generates a single sample for the Modular Arithmetic task with BIDMAS order of operations."""
+
+    # Set the seed if provided
+    if seed is not None:
+        torch.manual_seed(seed)
 
     if min_length > max_length:
         raise ValueError("min_length must be less than or equal to max_length")
 
-    original_length = generator.randint(min_length, max_length)
+    original_length = torch.randint(min_length, max_length + 1, (1,)).item()
 
     if original_length % 2 == 1:
         length = original_length + 1
@@ -21,11 +25,11 @@ def generate_sample(min_length, max_length, generator):
 
     # Fill in numbers
     for i in range(0, length, 2):
-        res[i] = generator.randint(5, 9)
+        res[i] = torch.randint(5, 9, (1,)).item()
 
     # Fill in operators
     for i in range(1, length - 1, 2):
-        res[i] = generator.randint(1, 3)
+        res[i] = torch.randint(1, 3, (1,)).item()
 
     # Set the '=' operator at the second last position
     res[-1] = 4

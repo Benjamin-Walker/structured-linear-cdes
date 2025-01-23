@@ -21,6 +21,8 @@ def train_model(
     data_dim,
     label_dim,
     task,
+    length,
+    depth,
     model_name,
     model,
     dataloader,
@@ -227,6 +229,7 @@ def run_experiment(config):
     second_embedding = config.get("second_embedding", False)
     early_stop_threshold = config.get("early_stop_threshold", 1.0)
     init_std = config.get("init_std", 1.0)
+    block_size = config.get("block_size", 1)
     sparsity = config.get("sparsity", 1.0)
     dropout_rate = config.get("dropout_rate", 0.01)
     length = config.get("length")
@@ -310,6 +313,7 @@ def run_experiment(config):
             data_dim=data_dim,
             label_dim=label_dim,
             init_std=init_std,
+            block_size=block_size,
             sparsity=sparsity,
             dropout_rate=dropout_rate,
             use_glu=use_glu,
@@ -358,6 +362,8 @@ def run_experiment(config):
         data_dim=data_dim,
         label_dim=label_dim,
         task=task,
+        length=length,
+        depth=num_blocks,
         model_name=model_name,
         model=model,
         dataloader=dataloader,
@@ -372,3 +378,5 @@ def run_experiment(config):
         print("Early stop triggered! Finished before reaching num_steps.")
     else:
         print("Training complete. Did not trigger early stopping.")
+
+    return model, steps, val_accs, early_stop
