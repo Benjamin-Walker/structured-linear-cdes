@@ -19,7 +19,7 @@ def generate_sample(min_length, max_length, seed=None):
         length += 1
 
     sequence = [
-        torch.randint(1, vocab_size - 2, (1,)).item() for _ in range(length // 2)
+        torch.randint(1, vocab_size - 1, (1,)).item() for _ in range(length // 2)
     ]
     target_sequence = sequence + sequence[::-1]
     sequence += [3]

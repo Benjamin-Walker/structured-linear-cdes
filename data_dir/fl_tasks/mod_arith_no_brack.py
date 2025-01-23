@@ -25,11 +25,11 @@ def generate_sample(min_length, max_length, seed=None):
 
     # Fill in numbers
     for i in range(0, length, 2):
-        res[i] = torch.randint(5, 9, (1,)).item()
+        res[i] = torch.randint(5, 10, (1,)).item()
 
     # Fill in operators
     for i in range(1, length - 1, 2):
-        res[i] = torch.randint(1, 3, (1,)).item()
+        res[i] = torch.randint(1, 4, (1,)).item()
 
     # Set the '=' operator at the second last position
     res[-1] = 4
