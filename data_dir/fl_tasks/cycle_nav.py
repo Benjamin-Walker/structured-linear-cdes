@@ -12,6 +12,9 @@ def generate_sample(min_length, max_length, seed=None):
     if seed is not None:
         torch.manual_seed(seed)
 
+    if min_length > max_length:
+        raise ValueError("min_length must be less than or equal to max_length")
+
     # Generate sequence length
     length = torch.randint(min_length, max_length + 1, (1,)).item()
 
