@@ -7,11 +7,13 @@ from data_dir.fl_tasks.mod_arith_w_brack import (
 vocab_size = 14  # [PAD], Numbers 0-4, '+', '-', '*', '(', ')', '=', 'x', [ACT]
 
 
-def generate_sample(min_length, max_length, generator):
+def generate_sample(min_length, max_length, seed=None):
     if min_length > max_length:
         raise ValueError("min_length must be less than or equal to max_length")
 
-    sample = generate_sample_mod_arith_w_brack(min_length, max_length, generator)
+    if seed is not None:
+        torch.manual_seed(seed)
+    sample = generate_sample_mod_arith_w_brack(min_length, max_length, seed)
 
     # Replace a number with 'x'
 
@@ -19,7 +21,7 @@ def generate_sample(min_length, max_length, generator):
     solution = sample[1]
 
     x_positions = [i for i, token in enumerate(sequence) if token < 6]
-    x_position = generator.choice(x_positions)
+    x_position = x_positions[torch.randint(0, len(x_positions), (1,)).item()]
     eqn_solution = sequence[x_position] - 1
     sequence[x_position] = 12  # Token for 'x' (modulus + 7)
     sequence += [solution, 13]

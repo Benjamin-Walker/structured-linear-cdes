@@ -206,10 +206,10 @@ class FormalLanguageDataset(Dataset):
 
     def __getitem__(self, idx):
         """Generates a sample on the fly based on the task-specific function."""
-        # Ensure reproducibility by resetting the seed for each sample generation
-        self.generator.seed(self.generator_seed + idx)
         # Generate a single data sample
-        sample = self.generate_sample(self.min_length, self.max_length, self.generator)
+        sample = self.generate_sample(
+            self.min_length, self.max_length, self.generator_seed + idx
+        )
         # Preprocess the sample
         return self.preprocess(sample)
 
@@ -292,10 +292,18 @@ def create_fl_dataloaders(
             generator=torch.Generator().manual_seed(seed),
         )
         train_loader = DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=True, collate_fn=col_fn
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            collate_fn=col_fn,
+            num_workers=32,
         )
         test_loader = DataLoader(
-            test_dataset, batch_size=batch_size, shuffle=False, collate_fn=col_fn
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            collate_fn=col_fn,
+            num_workers=32,
         )
     else:
         train_loader = DataLoader(

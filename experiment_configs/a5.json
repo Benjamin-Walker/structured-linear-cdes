@@ -1,0 +1,17 @@
+{
+  "task": "A5",
+  "length": 20,
+  "model_name": "lcde",
+  "num_blocks": 1,
+  "model_dim": 1024,
+  "batch_size": 256,
+  "num_steps": 1000000,
+  "print_steps": 10000,
+  "learning_rate": 0.002,
+  "dropout_rate": 0.1,
+  "block_size": 4,
+  "diagonal": true,
+  "fwht": false,
+  "use_glu": false
+}
+

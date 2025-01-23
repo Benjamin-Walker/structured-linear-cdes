@@ -86,7 +86,7 @@ from data_dir.fl_tasks.stack_manipulation import (
 
 def test_even_pairs_generate():
     for i in range(1000):
-        sample = generate_sample_even_pairs(3, 10, random.Random(i))
+        sample = generate_sample_even_pairs(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], str)
@@ -95,10 +95,10 @@ def test_even_pairs_generate():
         assert sample[1] in ["a", "b"]
         assert sample[1] == ("a" if sample[0][0] == sample[0][-1] else "b")
 
-    sample = generate_sample_even_pairs(3, 3, random.Random(0))
+    sample = generate_sample_even_pairs(3, 3, 0)
     assert len(sample[0]) == 3
 
-    sample = generate_sample_even_pairs(10, 10, random.Random(0))
+    sample = generate_sample_even_pairs(10, 10, 0)
     assert len(sample[0]) == 10
 
 
@@ -134,7 +134,7 @@ modular_arithmetic_dict = {
 
 def test_mod_arith_no_brack_generate():
     for i in range(1000):
-        sample = generate_sample_mod_arith_no_brack(3, 10, random.Random(i))
+        sample = generate_sample_mod_arith_no_brack(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
@@ -146,10 +146,10 @@ def test_mod_arith_no_brack_generate():
         question = "".join([modular_arithmetic_dict[i] for i in sample[0]][:-1])
         assert sample[1] == eval(question) % 5 + 5
 
-    sample = generate_sample_mod_arith_no_brack(3, 3, random.Random(0))
+    sample = generate_sample_mod_arith_no_brack(3, 3, 0)
     assert len(sample[0]) == 4
 
-    sample = generate_sample_mod_arith_no_brack(10, 10, random.Random(0))
+    sample = generate_sample_mod_arith_no_brack(10, 10, 0)
     assert len(sample[0]) == 10
 
 
@@ -360,7 +360,7 @@ def test_bucket_sort_preprocess():
 
 def test_cycle_nav_generate():
     for i in range(1000):
-        sample = generate_sample_cycle_nav(3, 10, random.Random(i))
+        sample = generate_sample_cycle_nav(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
@@ -368,10 +368,10 @@ def test_cycle_nav_generate():
         assert 3 <= len(sample[0]) <= 10
         assert 4 <= sample[1] <= 8
 
-    sample = generate_sample_cycle_nav(3, 3, random.Random(0))
+    sample = generate_sample_cycle_nav(3, 3, 0)
     assert len(sample[0]) == 3
 
-    sample = generate_sample_cycle_nav(10, 10, random.Random(0))
+    sample = generate_sample_cycle_nav(10, 10, 0)
     assert len(sample[0]) == 10
 
 
@@ -485,7 +485,7 @@ def test_odds_first_preprocess():
 
 def test_parity_generate():
     for i in range(1000):
-        sample = generate_sample_parity(3, 10, random.Random(i))
+        sample = generate_sample_parity(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
@@ -494,10 +494,10 @@ def test_parity_generate():
         assert sample[1] in ["a", "b"]
         assert sample[1] == ("a" if sample[0].count("b") % 2 == 0 else "b")
 
-    sample = generate_sample_parity(3, 3, random.Random(0))
+    sample = generate_sample_parity(3, 3, 0)
     assert len(sample[0]) == 3
 
-    sample = generate_sample_parity(10, 10, random.Random(0))
+    sample = generate_sample_parity(10, 10, 0)
     assert len(sample[0]) == 10
 
 
@@ -575,7 +575,7 @@ def test_duplicate_string_preprocess():
 
 def test_reverse_string_generate():
     for i in range(1000):
-        sample = generate_sample_reverse_string(3, 10, random.Random(i))
+        sample = generate_sample_reverse_string(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
@@ -583,11 +583,11 @@ def test_reverse_string_generate():
         assert 2 <= len(sample[0]) <= 6
         assert sample[1] == sample[0][:-1] + sample[0][:-1][::-1]
 
-    sample = generate_sample_reverse_string(3, 3, random.Random(0))
+    sample = generate_sample_reverse_string(3, 3, 0)
     assert len(sample[0]) == 3
     assert len(sample[1]) == 4
 
-    sample = generate_sample_reverse_string(10, 10, random.Random(0))
+    sample = generate_sample_reverse_string(10, 10, 0)
     assert len(sample[0]) == 6
     assert len(sample[1]) == 10
 
@@ -615,7 +615,7 @@ def test_reverse_string_preprocess():
 def test_stack_manipulation_generate():
     num_elements = 2
     for i in range(1000):
-        sample = generate_sample_stack_manipulation(3, 10, random.Random(i))
+        sample = generate_sample_stack_manipulation(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
@@ -650,11 +650,11 @@ def test_stack_manipulation_generate():
         ]
         assert stack == pred_stack
 
-    sample = generate_sample_stack_manipulation(3, 3, random.Random(0))
+    sample = generate_sample_stack_manipulation(3, 3, 0)
     assert len(sample[0]) == 3
     assert len(sample[1]) == 4
 
-    sample = generate_sample_stack_manipulation(10, 10, random.Random(0))
+    sample = generate_sample_stack_manipulation(10, 10, 0)
     assert len(sample[0]) == 6
     assert len(sample[1]) == 10
 
@@ -746,8 +746,6 @@ def test_set_preprocess():
 
 
 def test_generate_sample_mod_arith_with_brackets():
-    import random
-
     modulus = 5
     vocab = {
         "+": modulus + 1,
@@ -762,7 +760,7 @@ def test_generate_sample_mod_arith_with_brackets():
     inv_vocab = {v: k for k, v in vocab.items()}  # Invert the vocab
 
     for i in range(1000):
-        sample = generate_sample_mod_arith_w_brack(5, 20, random.Random(i))
+        sample = generate_sample_mod_arith_w_brack(5, 20, i)
         input_sequence, result_token = sample
 
         assert isinstance(input_sequence, list)
@@ -843,8 +841,6 @@ def test_preprocess_data_mod_arith_with_brackets():
 
 
 def test_generate_sample_solve_equation():
-    import random
-
     modulus = 5
 
     vocab = {
@@ -864,8 +860,7 @@ def test_generate_sample_solve_equation():
     }
 
     for i in range(1000):
-        generator = random.Random(i)
-        sequence, eqn_solution = generate_sample_solve_equation(5, 20, generator)
+        sequence, eqn_solution = generate_sample_solve_equation(5, 20, i)
 
         assert isinstance(sequence, list), "Sequence should be a list."
         assert all(
