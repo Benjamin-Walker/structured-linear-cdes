@@ -197,7 +197,7 @@ def train_model(
                 if early_stop:
                     return model, steps, val_accs, True
 
-            if step >= num_steps:
+            if step > num_steps:
                 break
 
             step += 1

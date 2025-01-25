@@ -60,7 +60,7 @@ def generate_sample(min_length, max_length, seed=None):
             return f"({left_str}*{right_str})", (left_val * right_val) % modulus
 
     # Generate an expression of random length between min_length and max_length
-    length = torch.randint(min_length, max_length + 1, (1,)).item()
+    length = torch.randint(min_length, max_length + 1, (1,)).item() - 1
     expression_str, result = generate_expression(length)
 
     # Convert expression to numerical representation
