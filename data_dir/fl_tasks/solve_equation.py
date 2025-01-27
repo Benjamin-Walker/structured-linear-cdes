@@ -11,9 +11,13 @@ def generate_sample(min_length, max_length, seed=None):
     if min_length > max_length:
         raise ValueError("min_length must be less than or equal to max_length")
 
+    if min_length <= 3:
+        # Require at least length 2 for generating mod arith with bracket
+        min_length = 4
+
     if seed is not None:
         torch.manual_seed(seed)
-    sample = generate_sample_mod_arith_w_brack(min_length, max_length, seed)
+    sample = generate_sample_mod_arith_w_brack(min_length - 2, max_length - 2, seed)
 
     # Replace a number with 'x'
 
