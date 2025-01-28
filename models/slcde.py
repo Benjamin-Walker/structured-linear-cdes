@@ -187,8 +187,8 @@ class LinearCDE(nn.Module):
                     A.view(-1, self.hidden_dim, self.hidden_dim),
                     y,
                 )
-            state_transition = state_transition + Bs[:, i - 1]
-            y = y + 10e6 * torch.tanh(state_transition / 10e6)
+            state_transition = 10e6 * torch.tanh(state_transition / 10e6) + Bs[:, i - 1]
+            y = y + state_transition
             ys[:, i] = y
 
         return ys
