@@ -1,8 +1,10 @@
 import datetime
 import json
 import os
+import random
 import time
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -14,6 +16,20 @@ from data_dir.dataloaders import (
     create_snake_dataloaders,
 )
 from models.lr_scheduler import LinearWarmupCosineAnnealing
+
+
+def set_seed(seed=42):
+    """
+    Sets the seed for Python, NumPy, and PyTorch to ensure reproducibility.
+
+    Args:
+        seed (int): The seed value to use.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
 
 
 def train_model(
@@ -100,11 +116,13 @@ def train_model(
                 X_2, y_2 = X_2.to(device), y_2.to(device)
                 outputs_2 = model(X_2)
                 loss = criterion(outputs_2[mask_2], y_2[mask_2].flatten())
+
                 loss.backward()
 
             X, y, mask = X.to(device), y.to(device), mask.to(device)
             outputs = model(X)
             loss = criterion(outputs[mask], y[mask].flatten())
+
             loss.backward()
 
             # Zero out any gradients if your model requires it
@@ -210,6 +228,8 @@ def run_experiment(config):
     Main driver for the experiment. Creates dataloaders (either for A5 or formal language),
     creates the model, calls train_model(), and saves results to the results/ folder.
     """
+    seed = config.get("seed", 1234)
+    set_seed(seed)
     # Read config fields
     task = config["task"]  # e.g., "A5" or "majority"
     model_name = config["model_name"]  # e.g., "lcde" or "mamba"

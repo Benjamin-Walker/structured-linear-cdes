@@ -7,5 +7,7 @@ repos:
     - id: ruff
       args: [ --extend-select, I, --fix ]
       types_or: [ python, pyi, jupyter ]
+      exclude: "xlstm_local/.*"
     # Run the formatter.
     - id: ruff-format
+      exclude: "xlstm_local/.*"
