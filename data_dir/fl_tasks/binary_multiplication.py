@@ -39,8 +39,12 @@ def binary_multiply(sequence):
     return solution
 
 
-def generate_sample(min_length, max_length, generator):
+def generate_sample(min_length, max_length, seed=None):
     """Generates a single sample for the Binary (little-Endian) Multiplication task."""
+
+    # Set the seed if provided
+    if seed is not None:
+        torch.manual_seed(seed)
 
     if min_length > max_length:
         raise ValueError("min_length must be less than or equal to max_length")
@@ -51,17 +55,17 @@ def generate_sample(min_length, max_length, generator):
             "sequence for binary multiplication must be at least 5, max(5, min_length) applied"
         )
 
-    length = generator.randint(min_length, max_length)
+    length = torch.randint(min_length, max_length + 1, (1,)).item()
 
     if length % 2 == 1:
         length += 1
 
-    sequence = [generator.randint(1, 2) for _ in range(length // 2 - 1)]
+    sequence = [torch.randint(1, 3, (1,)).item() for _ in range(length // 2 - 1)]
 
     # As representation in little-Endian, make sure final number is 1 (represented as 2)
     sequence.append(2)
 
-    operator_position = generator.randint(1, len(sequence) - 2)
+    operator_position = torch.randint(1, len(sequence) - 1, (1,)).item()
     sequence[operator_position] = 3
 
     # Fix the prior value before operator to be 1 (represented as 2)
