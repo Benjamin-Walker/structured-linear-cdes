@@ -20,19 +20,24 @@ def binary_sqrt(sequence):
     return solution
 
 
-def generate_sample(min_length, max_length, generator):
+def generate_sample(min_length, max_length, seed=None):
     """Generates a single sample for the binary (little-Endian) Computer Sqrt task."""
+
+    # Set the seed if provided
+    if seed is not None:
+        torch.manual_seed(seed)
+
     if min_length > max_length:
         raise ValueError("min_length must be less than or equal to max_length")
 
-    length = generator.randint(min_length, max_length)
+    length = torch.randint(min_length, max_length + 1, (1,)).item()
 
-    if length % 6 == 0:
+    if length % 6 == 0 or length == 255:
         length += 1
     elif length % 6 == 3:
         length += 2
 
-    sequence = [generator.randint(1, 2) for _ in range(2 * length // 3 - 1)]
+    sequence = [torch.randint(1, 3, (1,)).item() for _ in range(2 * length // 3 - 1)]
 
     # As representation in little-Endian, make sure final number is 1 (represented as 2)
     sequence.append(2)
