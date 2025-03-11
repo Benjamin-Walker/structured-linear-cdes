@@ -1,16 +1,16 @@
 {
-  "task": "cycle_nav",
+  "task": "parity",
   "model_name": "lcde",
   "num_blocks": 2,
-  "model_dim": 32,
+  "model_dim": 512,
   "batch_size": 256,
   "num_steps": 100001,
   "print_steps": 5000,
   "learning_rate": 0.002,
-  "early_stopping_threshold": 0.99,
-  "block_size": 16,
+  "early_stopping_threshold": 0.9995,
+  "block_size": 1,
   "diagonal": true,
-  "fwht": false,
+  "fwht": true,
   "use_glu": false,
   "seed": 1234
 }
