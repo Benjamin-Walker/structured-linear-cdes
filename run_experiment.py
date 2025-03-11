@@ -4,7 +4,7 @@ import json
 from train import run_experiment
 
 
-def main():
+def main(run=0):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-c",
@@ -21,9 +21,12 @@ def main():
     with open(config_path, "r") as f:
         config = json.load(f)
 
+    config["run"] = run
+
     # Hand off to run_experiment
     run_experiment(config)
 
 
 if __name__ == "__main__":
-    main()
+    for run in range(5):
+        main(run)

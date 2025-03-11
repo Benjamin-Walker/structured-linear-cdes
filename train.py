@@ -38,6 +38,8 @@ def train_model(
     label_dim,
     task,
     model_name,
+    model_dim,
+    block_size,
     model,
     dataloader,
     num_steps,
@@ -49,6 +51,7 @@ def train_model(
     weight_decay_others=1e-2,
     warmup_fraction=0.1,
     final_lr=1e-5,
+    run=0,
 ):
     """
     Trains the model for a specified number of steps, logging progress, and optionally
@@ -185,15 +188,19 @@ def train_model(
                     "timestamp": timestamp_str,
                 }
 
-                checkpoint_filename = f"checkpoint_{task}_{model_name}.pt"
+                checkpoint_filename = (
+                    f"checkpoint_{task}_{model_name}_{model_dim}_{block_size}_{run}.pt"
+                )
                 checkpoint_path = os.path.join("checkpoints", checkpoint_filename)
                 torch.save(checkpoint, checkpoint_path)
                 print(f"Saved model checkpoint to: {checkpoint_path}")
 
                 early_stop = accuracy > early_stop_threshold
 
-                out_filename = f"results_{task}_{model_name}.json"
-                out_path = os.path.join("results", out_filename)
+                out_filename = (
+                    f"results_{task}_{model_name}_{model_dim}_{block_size}_{run}.json"
+                )
+                out_path = os.path.join("results_repeats", out_filename)
 
                 # Gather all relevant info to save:
                 results_dict = {
@@ -228,7 +235,8 @@ def run_experiment(config):
     Main driver for the experiment. Creates dataloaders (either for A5 or formal language),
     creates the model, calls train_model(), and saves results to the results/ folder.
     """
-    seed = config.get("seed", 1234)
+    run = config.get("run", 0)
+    seed = config.get("seed", 1234) + run
     set_seed(seed)
     # Read config fields
     task = config["task"]  # e.g., "A5" or "majority"
@@ -245,7 +253,7 @@ def run_experiment(config):
     fwht = config.get("fwht", False)
     use_glu = config.get("use_glu", False)
     second_embedding = config.get("second_embedding", False)
-    early_stop_threshold = config.get("early_stop_threshold", 1.0)
+    early_stop_threshold = config.get("early_stopping_threshold", 1.0)
     init_std = config.get("init_std", 1.0)
     block_size = config.get("block_size", 1)
     sparsity = config.get("sparsity", 1.0)
@@ -274,10 +282,11 @@ def run_experiment(config):
                     yield (X, X_2), (y, y_2), (mask, mask_2)
 
         dataloader = {"train": train_dataloader_multilength(), "val": val_dataloader}
-    elif task == "snake":
+    elif task[:-1] == "snake":
+        num = task[-1]
         train_dataloader, val_dataloader, data_dim, label_dim = (
             create_snake_dataloaders(
-                pt_file="data_dir/snake_games/big_snake.pt",
+                pt_file=f"data_dir/snake_games_{num}/snake_merged.pt",
                 batch_size=batch_size,
                 train_split=0.999,
             )
@@ -293,7 +302,7 @@ def run_experiment(config):
             batch_size=batch_size,
             min_length=3,
             max_length=40,
-            padding_length=padding_length,
+            padding_length=40,
             train_split=1.0,
             seed=1234,
         )
@@ -381,6 +390,8 @@ def run_experiment(config):
         label_dim=label_dim,
         task=task,
         model_name=model_name,
+        model_dim=model_dim,
+        block_size=block_size,
         model=model,
         dataloader=dataloader,
         num_steps=num_steps,
@@ -388,6 +399,7 @@ def run_experiment(config):
         learning_rate=learning_rate,
         early_stop_threshold=early_stop_threshold,
         device=device,
+        run=run,
     )
 
     if early_stop:

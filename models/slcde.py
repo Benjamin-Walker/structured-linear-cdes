@@ -50,6 +50,7 @@ class LinearCDE(nn.Module):
         sparsity=1.0,
         init_std=1.0,
         block_size=1,
+        dt=1.5 / 256,
         diagonal=False,
         fwht=False,
     ):
@@ -58,6 +59,7 @@ class LinearCDE(nn.Module):
         self.hidden_dim = hidden_dim
         self.diagonal = diagonal
         self.fwht = fwht
+        self.dt = dt
 
         if self.fwht:
             self.hadamard = hadamard_matrix(hidden_dim).to(torch.device("cuda")) / (
@@ -136,10 +138,10 @@ class LinearCDE(nn.Module):
             )
 
         # Add increments of time as first channel
-        ts = torch.full((batch_size, seq_len, 1), 1.0 / (seq_len - 1), device=X.device)
-        inp = torch.cat(
-            (ts, X * 1.0 / (seq_len - 1)), dim=-1
-        )  # shape: (batch_size, seq_len, input_dim+1)
+        ts = torch.full((batch_size, seq_len, 1), 1.0, device=X.device)
+        inp = torch.cat((ts, X), dim=-1)  # shape: (batch_size, seq_len, input_dim+1)
+
+        inp = inp * self.dt
 
         # Initialize the hidden state
         x0 = X[:, 0, :]  # shape: (batch_size, input_dim)
@@ -182,13 +184,15 @@ class LinearCDE(nn.Module):
                         state_transition = (inp[:, i] @ self.vf_A) * y
             else:
                 A = self.vf_A(inp[:, i])
-                state_transition = torch.einsum(
-                    "bij,bj->bi",
-                    A.view(-1, self.hidden_dim, self.hidden_dim),
-                    y,
+                state_transition = (
+                    torch.einsum(
+                        "bij,bj->bi",
+                        A.view(-1, self.hidden_dim, self.hidden_dim),
+                        y,
+                    )
+                    + Bs[:, i - 1]
                 )
-            state_transition = 10e6 * torch.tanh(state_transition / 10e6) + Bs[:, i - 1]
-            y = y + state_transition
+            y = y + 10e10 * torch.tanh(state_transition / 10e10)
             ys[:, i] = y
 
         return ys
@@ -344,7 +348,7 @@ class StackedLCDE(nn.Module):
         self.blocks = nn.ModuleList(
             [
                 LinearCDEBlock(
-                    input_dim=embedding_dim,
+                    input_dim=model_dim,
                     hidden_dim=model_dim,
                     init_std=init_std,
                     block_size=block_size,
@@ -359,7 +363,7 @@ class StackedLCDE(nn.Module):
         )
 
         # Final projection: from embedding_dim -> label_dim
-        self.linear = nn.Linear(embedding_dim, label_dim)
+        self.linear = nn.Linear(model_dim, label_dim)
 
     def mask_grads(self):
         """
