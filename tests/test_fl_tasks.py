@@ -1,5 +1,3 @@
-import sys
-sys.path.append('../')
 import random
 
 import torch
@@ -1069,4 +1067,3 @@ def test_compute_sqrt_preprocess():
         assert (input_tensor == torch.tensor(sample[0])).all()
         assert (target_tensor == torch.tensor(expected_target)).all()
         assert (mask == torch.tensor(expected_mask, dtype=torch.bool)).all()
-
