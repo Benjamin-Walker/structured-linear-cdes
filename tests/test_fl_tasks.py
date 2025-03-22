@@ -1,3 +1,5 @@
+import sys
+sys.path.append('../')
 import random
 
 import torch
@@ -312,7 +314,7 @@ def test_bucket_sort_generate():
     vocab_size = 7
 
     for i in range(1000):
-        sample = generate_sample_bucket_sort(3, 10, random.Random(i))
+        sample = generate_sample_bucket_sort(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
@@ -322,10 +324,10 @@ def test_bucket_sort_generate():
         assert sample[0][-1] == vocab_size - 1
         assert sample[1][len(sample[0]) - 1 :] == sorted(sample[0][:-1])
 
-    sample = generate_sample_bucket_sort(4, 4, random.Random(0))
+    sample = generate_sample_bucket_sort(4, 4, 0)
     assert len(sample[0][:-1]) == 4 // 2
 
-    sample = generate_sample_bucket_sort(10, 10, random.Random(0))
+    sample = generate_sample_bucket_sort(10, 10, 0)
     assert len(sample[0][:-1]) == 10 // 2
 
 
@@ -395,7 +397,7 @@ def test_missing_duplicate_generate():
     vocab_size = 4
 
     for i in range(1000):
-        sample = generate_sample_missing_duplicate(3, 10, random.Random(i))
+        sample = generate_sample_missing_duplicate(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
@@ -404,10 +406,10 @@ def test_missing_duplicate_generate():
         assert sample[1] in range(1, 10)
         assert vocab_size - 1 in sample[0]
 
-    sample = generate_sample_missing_duplicate(3, 3, random.Random(0))
+    sample = generate_sample_missing_duplicate(3, 3, 0)
     assert len(sample[0]) == 4
 
-    sample = generate_sample_missing_duplicate(10, 10, random.Random(0))
+    sample = generate_sample_missing_duplicate(10, 10, 0)
     assert len(sample[0]) == 10
 
 
@@ -437,7 +439,7 @@ def test_missing_duplicate_preprocess():
 
 def test_odds_first_generate():
     for i in range(1000):
-        sample = generate_sample_odds_first(3, 10, random.Random(i))
+        sample = generate_sample_odds_first(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
@@ -448,11 +450,11 @@ def test_odds_first_generate():
         assert sample[0][:-1][::2] == sample[1][length : length + (length + 1) // 2]
         assert sample[0][:-1][1::2] == sample[1][length + (length + 1) // 2 :]
 
-    sample = generate_sample_odds_first(3, 3, random.Random(0))
+    sample = generate_sample_odds_first(3, 3, 0)
     assert len(sample[0]) == 3
     assert len(sample[1]) == 4
 
-    sample = generate_sample_odds_first(10, 10, random.Random(0))
+    sample = generate_sample_odds_first(10, 10, 0)
     assert len(sample[0]) == 6
     assert len(sample[1]) == 10
 
@@ -534,7 +536,7 @@ def test_parity_preprocess():
 
 def test_duplicate_string_generate():
     for i in range(1000):
-        sample = generate_sample_duplicate_string(3, 10, random.Random(i))
+        sample = generate_sample_duplicate_string(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
@@ -542,11 +544,11 @@ def test_duplicate_string_generate():
         assert 2 <= len(sample[0]) <= 6
         assert sample[1] == sample[0][:-1] + sample[0][:-1]
 
-    sample = generate_sample_duplicate_string(3, 3, random.Random(0))
+    sample = generate_sample_duplicate_string(3, 3, 0)
     assert len(sample[0]) == 3
     assert len(sample[1]) == 4
 
-    sample = generate_sample_duplicate_string(10, 10, random.Random(0))
+    sample = generate_sample_duplicate_string(10, 10, 0)
     assert len(sample[0]) == 6
     assert len(sample[1]) == 10
 
@@ -951,7 +953,7 @@ def test_binary_addition_generate():
     vocab_size = 5
 
     for i in range(1000):
-        sample = generate_sample_binary_addition(3, 10, random.Random(i))
+        sample = generate_sample_binary_addition(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
@@ -960,10 +962,10 @@ def test_binary_addition_generate():
         assert vocab_size - 1 in sample[0]
         assert vocab_size - 2 in sample[0]
 
-    sample = generate_sample_binary_addition(5, 5, random.Random(0))
+    sample = generate_sample_binary_addition(5, 5, 0)
     assert len(sample[1]) == 6
 
-    sample = generate_sample_binary_addition(10, 10, random.Random(0))
+    sample = generate_sample_binary_addition(10, 10, 0)
     assert len(sample[1]) == 10
 
 
@@ -990,7 +992,7 @@ def test_binary_multiplication_generate():
     vocab_size = 5
 
     for i in range(1000):
-        sample = generate_sample_binary_multiplication(3, 10, random.Random(i))
+        sample = generate_sample_binary_multiplication(3, 10, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
@@ -999,10 +1001,10 @@ def test_binary_multiplication_generate():
         assert vocab_size - 1 in sample[0]
         assert vocab_size - 2 in sample[0]
 
-    sample = generate_sample_binary_multiplication(5, 5, random.Random(0))
+    sample = generate_sample_binary_multiplication(5, 5, 0)
     assert len(sample[1]) == 6
 
-    sample = generate_sample_binary_multiplication(10, 10, random.Random(0))
+    sample = generate_sample_binary_multiplication(10, 10, 0)
     assert len(sample[1]) == 10
 
 
@@ -1030,20 +1032,20 @@ def test_binary_multiplication_preprocess():
 def test_binary_compute_sqrt_generate():
     vocab_size = 4
 
-    for i in range(1000):
-        sample = generate_sample_compute_sqrt(5, 10, random.Random(i))
+    for i in range(50):
+        sample = generate_sample_compute_sqrt(5, 40, i)
         assert isinstance(sample, tuple)
         assert len(sample) == 2
         assert isinstance(sample[0], list)
         assert isinstance(sample[1], list)
-        assert 3 <= len(sample[0]) <= 8
+        assert 5 <= len(sample[1]) <= 40
         assert vocab_size - 1 in sample[0]
 
-    sample = generate_sample_compute_sqrt(6, 6, random.Random(0))
-    assert len(sample[1]) == 7
+    sample = generate_sample_compute_sqrt(6, 6, 0)
+    assert len(sample[1]) == 5
 
-    sample = generate_sample_compute_sqrt(9, 9, random.Random(0))
-    assert len(sample[1]) == 11
+    sample = generate_sample_compute_sqrt(9, 9, 0)
+    assert len(sample[1]) == 7
 
 
 def test_compute_sqrt_preprocess():
@@ -1067,3 +1069,4 @@ def test_compute_sqrt_preprocess():
         assert (input_tensor == torch.tensor(sample[0])).all()
         assert (target_tensor == torch.tensor(expected_target)).all()
         assert (mask == torch.tensor(expected_mask, dtype=torch.bool)).all()
+

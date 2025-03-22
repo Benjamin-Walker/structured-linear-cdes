@@ -32,10 +32,10 @@ def generate_sample(min_length, max_length, seed=None):
 
     length = torch.randint(min_length, max_length + 1, (1,)).item()
 
-    if length % 6 == 0 or length == 255:
-        length += 1
+    if length % 6 == 0:
+        length -= 1
     elif length % 6 == 3:
-        length += 2
+        length -= 2
 
     sequence = [torch.randint(1, 3, (1,)).item() for _ in range(2 * length // 3 - 1)]
 
