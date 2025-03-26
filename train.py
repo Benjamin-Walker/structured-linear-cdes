@@ -294,11 +294,9 @@ def run_experiment(config):
 
         dataloader = {"train": train_dataloader, "val": val_dataloader}
     else:
-        train_padding_length = 40
-        if model_name == "xlstm":
-            train_padding_length = 256
-        elif model_name == "gateddeltanet":
-            train_padding_length = 65
+        train_padding_length = 256
+        if model_name == "lcde":
+            train_padding_length = 40
         val_padding_length = 256
         # Formal language tasks, e.g. "majority"
         train_dataloader, _, data_dim, label_dim = create_fl_dataloaders(
