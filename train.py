@@ -294,7 +294,12 @@ def run_experiment(config):
 
         dataloader = {"train": train_dataloader, "val": val_dataloader}
     else:
-        padding_length = 256
+        train_padding_length = 40
+        if model_name == "xlstm":
+            train_padding_length = 256
+        elif model_name == "gateddeltanet":
+            train_padding_length = 65
+        val_padding_length = 256
         # Formal language tasks, e.g. "majority"
         train_dataloader, _, data_dim, label_dim = create_fl_dataloaders(
             task,
@@ -302,7 +307,7 @@ def run_experiment(config):
             batch_size=batch_size,
             min_length=3,
             max_length=40,
-            padding_length=40,
+            padding_length=train_padding_length,
             train_split=1.0,
             seed=1234,
         )
@@ -312,7 +317,7 @@ def run_experiment(config):
             batch_size=batch_size,
             min_length=40,
             max_length=256,
-            padding_length=padding_length,
+            padding_length=val_padding_length,
             train_split=1.0,
             seed=2345,
         )
@@ -323,6 +328,19 @@ def run_experiment(config):
         from models.mamba import StackedMamba
 
         model = StackedMamba(
+            num_blocks=num_blocks,
+            model_dim=model_dim,
+            data_dim=data_dim,
+            label_dim=label_dim,
+            dropout_rate=dropout_rate,
+            use_glu=use_glu,
+            second_embedding=second_embedding,
+        )
+    elif model_name in ["deltanet", "gateddeltanet", "rwkv7"]:
+        from models.fla import StackedBlock
+
+        model = StackedBlock(
+            layer_type=model_name,
             num_blocks=num_blocks,
             model_dim=model_dim,
             data_dim=data_dim,
