@@ -1,7 +1,8 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 
 
 class RotaryPositionalEncoding(nn.Module):
@@ -16,6 +17,7 @@ class RotaryPositionalEncoding(nn.Module):
     The dimension is typically split in half for the actual rotation
     (the even-odd pairs in each head).
     """
+
     def __init__(self, num_heads, d_model, base=10000.0, max_len=500):
         super().__init__()
         self.num_heads = num_heads
@@ -25,20 +27,22 @@ class RotaryPositionalEncoding(nn.Module):
         self.max_len = max_len
 
         # We usually assume head_dim is even so that we can split in half cleanly
-        assert self.head_dim % 2 == 0, (
-            f"RoPE typically requires an even head_dim, but got {self.head_dim}."
-        )
+        assert (
+            self.head_dim % 2 == 0
+        ), f"RoPE typically requires an even head_dim, but got {self.head_dim}."
 
         half_dim = self.head_dim // 2
-        inv_freq = 1.0 / (self.base ** (
-            torch.arange(0, half_dim, dtype=torch.float32) / half_dim
-        ))
+        inv_freq = 1.0 / (
+            self.base ** (torch.arange(0, half_dim, dtype=torch.float32) / half_dim)
+        )
         # Register as buffer for easy device transfer
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
         # Precompute a maximum cos/sin buffer for [max_len].
         # This can be re-used if seq_len <= max_len.
-        positions = torch.arange(self.max_len, dtype=torch.float32).unsqueeze(1)  # shape: [max_len, 1]
+        positions = torch.arange(self.max_len, dtype=torch.float32).unsqueeze(
+            1
+        )  # shape: [max_len, 1]
         # shape: [max_len, half_dim]
         theta = positions * self.inv_freq.unsqueeze(0)
         # shape: [1, max_len, half_dim]
@@ -61,7 +65,9 @@ class RotaryPositionalEncoding(nn.Module):
             sin_theta = self.sin_cached[:, :seq_len, :]
         else:
             # If seq_len > max_len, compute on the fly (less common)
-            positions = torch.arange(seq_len, device=device, dtype=torch.float32).unsqueeze(1)
+            positions = torch.arange(
+                seq_len, device=device, dtype=torch.float32
+            ).unsqueeze(1)
             theta = positions * self.inv_freq.unsqueeze(0).to(device)
             cos_theta = torch.cos(theta).unsqueeze(0)
             sin_theta = torch.sin(theta).unsqueeze(0)
@@ -103,8 +109,9 @@ def apply_rope(q, k, cos, sin):
     return q_rot, k_rot
 
 
-
-def custom_scaled_dot_product_attention(Q, K, V, attn_mask=None, dropout_p=0.0, training=False):
+def custom_scaled_dot_product_attention(
+    Q, K, V, attn_mask=None, dropout_p=0.0, training=False
+):
     """
     Q, K, V: [B, nHeads, T, head_dim]
     attn_mask (optional): [B, nHeads, T, T] or broadcastable
@@ -138,6 +145,7 @@ class CustomMultiheadAttention(nn.Module):
     Multihead attention that supports a 4D (per-head) bias/mask,
     returning both attn_output and attn_weights.
     """
+
     def __init__(self, d_model, num_heads, dropout=0.0):
         super().__init__()
         self.d_model = d_model
@@ -180,10 +188,12 @@ class CustomMultiheadAttention(nn.Module):
 
         # 3) Scaled-dot-product attention w/ possible 4D mask
         attn, attn_weights = custom_scaled_dot_product_attention(
-            Q, K, V,
+            Q,
+            K,
+            V,
             attn_mask=attn_mask,
             dropout_p=self.dropout_p,
-            training=self.training
+            training=self.training,
         )
         # attn: [B, nHeads, T, head_dim]
         # attn_weights: [B, nHeads, T, T]
@@ -199,14 +209,16 @@ class CustomMultiheadAttention(nn.Module):
         else:
             return out, attn_weights
 
+
 class MultiheadAttentionWithPositionEnc(nn.Module):
-    def __init__(self, d_model, nhead, dropout,
-                 use_rope=True, max_len=500, need_weights=True):
+    def __init__(
+        self, d_model, nhead, dropout, use_rope=True, max_len=500, need_weights=True
+    ):
         """
         - use_rope: whether to use rotary position embeddings
         """
         super().__init__()
-        self.use_rope = use_rope        
+        self.use_rope = use_rope
         self.num_heads = nhead
         self.need_weights = need_weights
 
@@ -234,21 +246,26 @@ class MultiheadAttentionWithPositionEnc(nn.Module):
             pad_mask = ~input_pad_mask.unsqueeze(1).unsqueeze(2)
             # If attn_mask is None (no relative), create zeros first
             if attn_mask is None:
-                attn_mask = torch.zeros((B, self.num_heads, T, T),
-                                        device=x.device, dtype=x.dtype)
+                attn_mask = torch.zeros(
+                    (B, self.num_heads, T, T), device=x.device, dtype=x.dtype
+                )
             # Now mask out the padded keys
             attn_mask = attn_mask.masked_fill(pad_mask, float("-inf"))
 
         # ---------------------------------------------------------------------
         # NEW: Build the causal mask so that tokens cannot attend to "future" positions
         # causal_mask[i, j] = True if j > i (we mask those).
-        causal_mask = torch.triu(torch.ones(T, T, device=x.device, dtype=torch.bool), diagonal=1)
+        causal_mask = torch.triu(
+            torch.ones(T, T, device=x.device, dtype=torch.bool), diagonal=1
+        )
         # Expand to shape [1, 1, T, T] so it can broadcast
         causal_mask = causal_mask.unsqueeze(0).unsqueeze(1)  # [1, 1, T, T]
-        
+
         # If no existing mask, create a float-zero mask. Then mask out future positions.
         if attn_mask is None:
-            attn_mask = torch.zeros((B, self.num_heads, T, T), device=x.device, dtype=x.dtype)
+            attn_mask = torch.zeros(
+                (B, self.num_heads, T, T), device=x.device, dtype=x.dtype
+            )
             attn_mask = attn_mask.masked_fill(causal_mask, float("-inf"))
         else:
             attn_mask = attn_mask.masked_fill(causal_mask, float("-inf"))
@@ -259,7 +276,7 @@ class MultiheadAttentionWithPositionEnc(nn.Module):
             x,
             attn_mask=attn_mask,
             need_weights=self.need_weights,
-            rope_module=self.rope if self.use_rope else None
+            rope_module=self.rope if self.use_rope else None,
         )
 
         return results
@@ -267,16 +284,27 @@ class MultiheadAttentionWithPositionEnc(nn.Module):
 
 class PreNormTransformerDecoderLayer(nn.Module):
     """Transformer Decoder Layer with Pre-Layer Normalization (causal mask)."""
-    def __init__(self, d_model, nhead, dim_feedforward,
-                 dropout, activation, 
-                 max_len, need_weights=True, use_rope=False):
+
+    def __init__(
+        self,
+        d_model,
+        nhead,
+        dim_feedforward,
+        dropout,
+        activation,
+        max_len,
+        need_weights=True,
+        use_rope=False,
+    ):
         super(PreNormTransformerDecoderLayer, self).__init__()
         self.norm1 = nn.LayerNorm(d_model)
         self.attention = MultiheadAttentionWithPositionEnc(
-            d_model, nhead, dropout,
+            d_model,
+            nhead,
+            dropout,
             use_rope=use_rope,
             max_len=max_len,
-            need_weights=need_weights
+            need_weights=need_weights,
         )
         self.norm2 = nn.LayerNorm(d_model)
         self.need_weights = need_weights
@@ -315,12 +343,12 @@ class CausalTransformer(nn.Module):
         dropout_rate,
         num_heads=16,
         ff_hidden_dim=512,
-        use_rope=True, 
+        use_rope=True,
         max_len=1000,
         second_embedding=False,
     ):
         super(CausalTransformer, self).__init__()
-        
+
         self.second_embedding = second_embedding
         embedding_dim = model_dim // 2 if second_embedding else model_dim
 
@@ -335,45 +363,44 @@ class CausalTransformer(nn.Module):
             self.positional_embedding = nn.Parameter(torch.zeros(max_len, model_dim))
             nn.init.xavier_uniform_(self.positional_embedding)
 
-        self.decoder_layers = nn.ModuleList([
-            PreNormTransformerDecoderLayer(
-                d_model=model_dim,
-                nhead=num_heads,
-                dim_feedforward=ff_hidden_dim,
-                dropout=dropout_rate,
-                activation="gelu",
-                use_rope=self.use_rope,
-                max_len=max_len
-            )
-            for _ in range(num_blocks)
-        ])
+        self.decoder_layers = nn.ModuleList(
+            [
+                PreNormTransformerDecoderLayer(
+                    d_model=model_dim,
+                    nhead=num_heads,
+                    dim_feedforward=ff_hidden_dim,
+                    dropout=dropout_rate,
+                    activation="gelu",
+                    use_rope=self.use_rope,
+                    max_len=max_len,
+                )
+                for _ in range(num_blocks)
+            ]
+        )
 
         self.final_layer_norm = nn.LayerNorm(model_dim)
         self.linear = nn.Linear(model_dim, label_dim)
-        
-        
+
     def mask_grads(self):
         pass
-
 
     def forward(self, x, input_pad_mask=None):
         """
         x: shape [B, T] if single embedding, or [B, T, 2] if second_embedding=True
         input_pad_mask: [B, T], True => real token, False => pad
         """
-        
+
         if not self.second_embedding:
             x = self.embedding(x)  # [B, T, model_dim]
         else:
             # If using second embedding then combine along last dim
-            x = torch.cat([
-                self.embedding(x[:, :, 0]),
-                self.embedding2(x[:, :, 1])
-            ], dim=-1)  # [B, S, model_dim]
+            x = torch.cat(
+                [self.embedding(x[:, :, 0]), self.embedding2(x[:, :, 1])], dim=-1
+            )  # [B, S, model_dim]
 
         # If using absolute positional encoding, add position embeddings
         if not self.use_rope:
-            pos_embedding = self.positional_embedding[:x.size(1), :]
+            pos_embedding = self.positional_embedding[: x.size(1), :]
             x = x + pos_embedding.unsqueeze(0)
 
         # Pass through the decoder layers
@@ -382,4 +409,3 @@ class CausalTransformer(nn.Module):
 
         x = self.final_layer_norm(x)
         return self.linear(x)  # shape [B, T, label_dim]
-
