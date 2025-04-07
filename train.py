@@ -200,6 +200,7 @@ def train_model(
                 out_filename = (
                     f"results_{task}_{model_name}_{model_dim}_{block_size}_{run}.json"
                 )
+
                 out_path = os.path.join("results_repeats", out_filename)
 
                 # Gather all relevant info to save:
@@ -253,18 +254,18 @@ def run_experiment(config):
     fwht = config.get("fwht", False)
     use_glu = config.get("use_glu", False)
     second_embedding = config.get("second_embedding", False)
-    early_stop_threshold = config.get("early_stopping_threshold", 1.0)
+    early_stop_threshold = config.get("early_stop_threshold", 1.0)
     init_std = config.get("init_std", 1.0)
     block_size = config.get("block_size", 1)
     sparsity = config.get("sparsity", 1.0)
     dropout_rate = config.get("dropout_rate", 0.01)
     length = config.get("length")
+    slstm_at = config.get("slstm_at", [1])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Create DataLoader(s)
     if task == "A5":
-        padding_length = length
         train_dataloader, val_dataloader, data_dim, label_dim = create_a5_dataloaders(
             length=length, train_split=0.8, batch_size=batch_size
         )
@@ -385,12 +386,22 @@ def run_experiment(config):
             label_dim=label_dim,
             dropout_rate=dropout_rate,
             second_embedding=second_embedding,
-            context_length=padding_length,
+            context_length=train_padding_length,
+            slstm_at=slstm_at,
+        )
+    elif model_name == "transformer_causal":
+        from models.transformer import CausalTransformer
+
+        model = CausalTransformer(
+            num_blocks=num_blocks,
+            data_dim=data_dim,
+            model_dim=model_dim,
+            label_dim=label_dim,
+            dropout_rate=dropout_rate,
+            second_embedding=second_embedding,
         )
     else:
-        raise ValueError(
-            "Model not recognized. Must be 'mamba', 'lcde', 'lstm', or 'xlstm'."
-        )
+        raise ValueError("Model not recognized.")
 
     pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Number of trainable parameters: {pytorch_total_params}")

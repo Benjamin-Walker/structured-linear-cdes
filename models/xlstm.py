@@ -49,7 +49,7 @@ class xLSTM(nn.Module):
             context_length=context_length,
             num_blocks=num_blocks,
             embedding_dim=model_dim,
-            slstm_at=slstm_at or [1],
+            slstm_at=slstm_at,
             dropout=dropout_rate,
         )
 
