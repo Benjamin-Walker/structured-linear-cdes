@@ -1,3 +1,8 @@
+""" "
+This model uses the modified flash linear attention package from:
+    https://github.com/automl/unlocking_state_tracking
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,8 +11,7 @@ from fla.layers import DeltaNet
 
 class Block(nn.Module):
     """
-    A single block that can internally use one of:
-      DeltaNet
+    A block containing a modified DeltaNet layer which can have negative eigenvalues.
     """
 
     def __init__(
