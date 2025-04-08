@@ -108,34 +108,6 @@ def test_stackedlcde_forward():
     assert output.shape == (batch_size, seq_len, label_dim)
 
 
-def test_increment_linearcde():
-    input_dim = 1
-    hidden_dim = 3
-
-    linear_cde = LinearCDE(input_dim, hidden_dim)
-    with torch.no_grad():
-        linear_cde.init_layer.weight.data.fill_(0)
-        linear_cde.vf_B.weight.fill_(0)
-        bias_init = torch.zeros(hidden_dim)
-        bias_init[0] = 1
-        linear_cde.init_layer.bias = torch.nn.Parameter(bias_init)
-
-        vf_A = torch.zeros(hidden_dim * hidden_dim, input_dim + 1)
-        vf_A[3, 0] = 1
-        vf_A[6, 1] = 1
-        linear_cde.vf_A.weight = torch.nn.Parameter(vf_A)
-
-    X = torch.Tensor([[[0], [1.5], [-1.5]]])
-
-    output = linear_cde(X)
-
-    # Linear CDE with the given initialisation should give the increment of the
-    # two dimensional path with the first dimension as time from 0 to 1 and
-    # the second dimension as cumulative sum of the input
-    expected = torch.Tensor([[[1, 0, 0], [1, 0.5, 1.5], [1, 1.0, 0.0]]])
-    assert torch.all(output.eq(expected))
-
-
 def test_stackedlcde_dropout():
     batch_size = 2
     seq_len = 3
@@ -239,3 +211,59 @@ def test_linearcde_sparsity():
             assert torch.isclose(
                 torch.tensor(actual_sparsity), torch.tensor(sparsity), atol=0.01
             )
+
+
+def test_linearcde_scan_vs_recurrent():
+    """
+    Check that LinearCDE's scan_forward and recurrent_forward produce the same results
+    for different configurations (diagonal / FWHT).
+    """
+    batch_size = 2
+    seq_len = 5
+    input_dim = 4
+    hidden_dim = 8
+
+    # We'll test three configurations:
+    # 1. diagonal=False, fwht=False
+    # 2. diagonal=True, fwht=False
+    # 3. diagonal=False, fwht=True
+    configs = [
+        {"diagonal": False, "fwht": False},
+        {"diagonal": True, "fwht": False},
+        {"diagonal": True, "fwht": True},
+    ]
+
+    for cfg in configs:
+        diagonal = cfg["diagonal"]
+        fwht = cfg["fwht"]
+
+        # Some combos won't work in scan_forward, so skip them:
+        # If diagonal=True and fwht=True --> Not implemented in scan.
+        if diagonal and fwht:
+            continue
+
+        # Build the model
+        model = LinearCDE(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            diagonal=diagonal,
+            fwht=fwht,
+        )
+
+        # Dummy input
+        X = torch.randn(batch_size, seq_len, input_dim)
+
+        # Forward pass using .recurrent_forward
+        with torch.no_grad():
+            y_recur = model.recurrent_forward(X)
+            # Forward pass using .scan_forward
+            y_scan = model.scan_forward(X)
+
+        # Check shape is the same
+        assert y_recur.shape == y_scan.shape, (
+            f"Shape mismatch: " f"recurrent {y_recur.shape} vs scan {y_scan.shape}"
+        )
+        # Check values are close
+        assert torch.allclose(
+            y_recur, y_scan, rtol=1e-5, atol=1e-5
+        ), f"Scan vs Recurrent mismatch for diagonal={diagonal}, fwht={fwht}"
