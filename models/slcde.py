@@ -53,7 +53,7 @@ class LinearCDE(nn.Module):
         sparsity=1.0,
         init_std=1.0,
         block_size=1,
-        dt=1.5 / 256,
+        dt=1.0 / 40,
         diagonal=False,
         fwht=False,
     ):
@@ -76,7 +76,8 @@ class LinearCDE(nn.Module):
         self.block_size = block_size
         if self.diagonal:
             self.vf_A = torch.nn.Parameter(
-                torch.randn(input_dim + 1, hidden_dim * self.block_size) * init_std
+                torch.randn(input_dim + 1, hidden_dim * self.block_size)
+                * (init_std / (self.block_size**0.5))
             )
         else:
             self.vf_A = nn.Linear(input_dim + 1, hidden_dim * hidden_dim, bias=False)
@@ -84,6 +85,7 @@ class LinearCDE(nn.Module):
                 self.vf_A.weight, mean=0.0, std=init_std / (hidden_dim**0.5)
             )
         self.vf_B = nn.Linear(input_dim + 1, hidden_dim, bias=False)
+        nn.init.normal_(self.vf_B.weight, mean=0.0, std=init_std)
 
         # Apply custom weight initialization
         nn.init.normal_(self.init_layer.weight, mean=0.0, std=init_std)
