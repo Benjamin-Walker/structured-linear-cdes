@@ -237,11 +237,6 @@ def test_linearcde_scan_vs_recurrent():
         diagonal = cfg["diagonal"]
         fwht = cfg["fwht"]
 
-        # Some combos won't work in scan_forward, so skip them:
-        # If diagonal=True and fwht=True --> Not implemented in scan.
-        if diagonal and fwht:
-            continue
-
         # Build the model
         model = LinearCDE(
             input_dim=input_dim,
@@ -250,8 +245,12 @@ def test_linearcde_scan_vs_recurrent():
             fwht=fwht,
         )
 
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        model.to(device)
+
         # Dummy input
-        X = torch.randn(batch_size, seq_len, input_dim)
+        X = torch.randn(batch_size, seq_len, input_dim).to(device)
 
         # Forward pass using .recurrent_forward
         with torch.no_grad():

@@ -140,10 +140,9 @@ class LinearCDE(nn.Module):
                 "Sequence length must be at least 2 for uniform time increments."
             )
 
-        # Add increments of time as first channel
+        # Add increments of time as first channel and scale by dt
         ts = torch.full((batch_size, seq_len, 1), 1.0, device=X.device)
         inp = torch.cat((ts, X), dim=-1)  # shape: (batch_size, seq_len, input_dim+1)
-
         inp = inp * self.dt
 
         # Initialize the hidden state
@@ -217,7 +216,7 @@ class LinearCDE(nn.Module):
                 "Sequence length must be at least 2 for uniform time increments."
             )
 
-        # 1) Add time channel and scale by dt
+        # 1) Add increments of time as first channel and scale by dt
         ts = torch.full((batch_size, seq_len, 1), 1.0, device=X.device)
         inp = torch.cat((ts, X), dim=-1)  # (batch_size, seq_len, input_dim+1)
         inp = inp * self.dt
