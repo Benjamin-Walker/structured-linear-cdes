@@ -1,51 +1,35 @@
+""" "
+This model uses the modified flash linear attention package from:
+    https://github.com/automl/unlocking_state_tracking
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fla.layers import DeltaNet, GatedDeltaNet, RWKV6Attention, RWKV7Attention
+from fla.layers import DeltaNet
 
 
 class Block(nn.Module):
     """
-    A single block that can internally use one of:
-      DeltaNet, GatedDeltaNet, or RWKV7Attention.
+    A block containing a modified DeltaNet layer which can have negative eigenvalues.
     """
 
     def __init__(
         self,
         model_dim: int,
         layer_idx: int = 0,
-        layer_type: str = "deltanet",
         dropout_rate: float = 0.1,
+        sigmoid_scale: float = 1.0,
         use_glu: bool = False,
     ):
         super().__init__()
         # Keep track of which layer index this is
         self.layer_idx = layer_idx
-        self.layer_type = layer_type.lower()
         self.model_dim = model_dim
 
-        layer_map = {
-            "deltanet": DeltaNet,
-            "gateddeltanet": GatedDeltaNet,
-            "rwkv7": RWKV7Attention,
-            "rwkv6": RWKV6Attention,
-        }
-        if self.layer_type not in layer_map:
-            raise ValueError(
-                f"Unknown layer_type '{layer_type}'. "
-                f"Choose from {list(layer_map.keys())}."
-            )
-
-        # Instantiate the chosen layer
-        # For RWKV7 specifically, we can pass in layer_idx if needed
-        if self.layer_type == "rwkv7" or self.layer_type == "rwkv6":
-            self.layer = layer_map[self.layer_type](
-                mode="chunk",
-                hidden_size=model_dim,
-                layer_idx=layer_idx,  # so the RWKV7 layer can see its index
-            ).bfloat16()
-        else:
-            self.layer = layer_map[self.layer_type](hidden_size=model_dim).bfloat16()
+        self.layer = DeltaNet(
+            hidden_size=model_dim, sigmoid_scale=sigmoid_scale
+        ).bfloat16()
 
         self.norm = nn.LayerNorm(model_dim)
         self.drop = nn.Dropout(p=dropout_rate)
@@ -62,17 +46,9 @@ class Block(nn.Module):
         x: torch.Tensor,
         v_first: torch.Tensor = None,
     ):
-        if self.layer_type == "rwkv7" or self.layer_type == "rwkv6":
-            out = self.layer(x.bfloat16(), v_first=v_first)
-            y = out[0].float()
-            if self.layer_type == "rwkv7":
-                new_v_first = out[3]
-            elif self.layer_type == "rwkv6":
-                new_v_first = out[2]
-        else:
-            out = self.layer(x.bfloat16())
-            y = out[0].float()
-            new_v_first = v_first
+        out = self.layer(x.bfloat16())
+        y = out[0].float()
+        new_v_first = v_first
 
         # Apply the residual connection
         y = y + x
@@ -104,8 +80,8 @@ class StackedBlock(nn.Module):
         model_dim: int,
         data_dim: int,
         label_dim: int,
-        layer_type: str = "deltanet",
         dropout_rate: float = 0.1,
+        sigmoid_scale: float = 1.0,
         use_glu: bool = False,
         second_embedding: bool = False,
     ):
@@ -123,7 +99,7 @@ class StackedBlock(nn.Module):
                 Block(
                     layer_idx=i,
                     model_dim=model_dim,
-                    layer_type=layer_type,
+                    sigmoid_scale=sigmoid_scale,
                     dropout_rate=dropout_rate,
                     use_glu=use_glu,
                 )

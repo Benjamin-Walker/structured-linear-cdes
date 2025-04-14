@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, Dataset, random_split
 
 
 class A5Dataset(Dataset):
-    def __init__(self, length):
+    def __init__(self, length, padding_length=None):
         # Load data from CSV file
         df = pd.read_csv(f"data_dir/illusion/A5={length}.csv")
 
@@ -19,7 +19,9 @@ class A5Dataset(Dataset):
         # Store data as torch tensors
         self.data = torch.tensor(input_array, dtype=torch.long)
         self.labels = torch.tensor(target_array, dtype=torch.long)
-        self.length = length
+        self.original_length = length
+        # If no padding_length is provided, use the original length
+        self.padding_length = padding_length if padding_length is not None else length
         self.data_dim = 60
         self.label_dim = 60
 
@@ -27,25 +29,47 @@ class A5Dataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        return (
-            self.data[idx],
-            self.labels[idx],
-            torch.ones((self.length,), dtype=torch.bool),
-        )
+        # Get the original sequences
+        input_seq = self.data[idx]
+        target_seq = self.labels[idx]
+        current_length = input_seq.size(0)
+
+        # If the padding length is greater than the original, pad; otherwise, truncate.
+        if current_length < self.padding_length:
+            pad_size = self.padding_length - current_length
+            input_seq = torch.cat(
+                [input_seq, torch.zeros(pad_size, dtype=input_seq.dtype)]
+            )
+            target_seq = torch.cat(
+                [target_seq, torch.zeros(pad_size, dtype=target_seq.dtype)]
+            )
+            # Mask: 1 for data, 0 for padded tokens
+            mask = torch.cat(
+                [
+                    torch.ones(current_length, dtype=torch.bool),
+                    torch.zeros(pad_size, dtype=torch.bool),
+                ]
+            )
+        elif current_length > self.padding_length:
+            input_seq = input_seq[: self.padding_length]
+            target_seq = target_seq[: self.padding_length]
+            mask = torch.ones(self.padding_length, dtype=torch.bool)
+        else:
+            mask = torch.ones(self.padding_length, dtype=torch.bool)
+
+        return input_seq, target_seq, mask
 
 
 def create_a5_dataloaders(
-    length, train_split=0.8, batch_size=32, seed=1234, shuffle=True
+    length, padding_length=None, train_split=0.8, batch_size=32, seed=1234, shuffle=True
 ):
-    # Initialize the dataset
-    dataset = A5Dataset(length)
-
+    # Initialize the dataset with the new padding_length parameter
+    dataset = A5Dataset(length, padding_length)
     data_dim = dataset.data_dim
     label_dim = dataset.label_dim
 
     # Create DataLoader for training and testing
     if train_split < 1:
-        # Determine the train/test split
         train_size = int(train_split * len(dataset))
         test_size = len(dataset) - train_size
 

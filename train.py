@@ -267,12 +267,12 @@ def run_experiment(config):
     # Create DataLoader(s)
     if task == "A5":
         train_dataloader, val_dataloader, data_dim, label_dim = create_a5_dataloaders(
-            length=length, train_split=0.8, batch_size=batch_size
+            length=length, train_split=0.8, batch_size=batch_size, padding_length=65
         )
 
         # Optional: combining with length=2 if needed
         dataloader_length2, _, _, _ = create_a5_dataloaders(
-            2, train_split=1.0, batch_size=batch_size // 10
+            2, train_split=1.0, batch_size=batch_size // 10, padding_length=65
         )
 
         def train_dataloader_multilength():
@@ -335,7 +335,7 @@ def run_experiment(config):
             use_glu=use_glu,
             second_embedding=second_embedding,
         )
-    elif model_name in ["deltanet", "gateddeltanet", "rwkv7"]:
+    elif model_name in ["deltanet", "gateddeltanet", "rwkv7", "rwkv6"]:
         from models.fla import StackedBlock
 
         model = StackedBlock(
@@ -348,6 +348,20 @@ def run_experiment(config):
             use_glu=use_glu,
             second_embedding=second_embedding,
         )
+    elif model_name in ["deltanet2"]:
+        from models.deltanet2 import StackedBlock
+
+        model = StackedBlock(
+            num_blocks=num_blocks,
+            model_dim=model_dim,
+            data_dim=data_dim,
+            label_dim=label_dim,
+            sigmoid_scale=2,
+            dropout_rate=dropout_rate,
+            use_glu=use_glu,
+            second_embedding=second_embedding,
+        )
+
     elif model_name == "lcde":
         from models.slcde import StackedLCDE
 
