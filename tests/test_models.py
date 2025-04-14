@@ -266,3 +266,4 @@ def test_linearcde_scan_vs_recurrent():
         assert torch.allclose(
             y_recur, y_scan, rtol=1e-5, atol=1e-5
         ), f"Scan vs Recurrent mismatch for diagonal={diagonal}, fwht={fwht}"
+
