@@ -316,7 +316,7 @@ def run_experiment(config):
             max_length=40,
             padding_length=train_padding_length,
             train_split=1.0,
-            seed=1234,
+            seed=seed,
         )
         val_dataloader, _, _, _ = create_fl_dataloaders(
             task,
@@ -326,7 +326,7 @@ def run_experiment(config):
             max_length=256,
             padding_length=val_padding_length,
             train_split=1.0,
-            seed=2345,
+            seed=2 * seed,
         )
         dataloader = {"train": train_dataloader, "val": val_dataloader}
 
