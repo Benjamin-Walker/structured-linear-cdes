@@ -12,6 +12,7 @@ import torch.optim as optim
 # Local imports
 from data_dir.dataloaders import (
     create_a5_dataloaders,
+    create_c4_dataloaders,
     create_fl_dataloaders,
     create_snake_dataloaders,
 )
@@ -131,7 +132,17 @@ def train_model(
                 if hasattr(block, "LCDE"):
                     norm += torch.sum(block.LCDE.vf_A**2) ** 0.5
 
-            loss = criterion(outputs[mask], y[mask].flatten()) + vf_A_norm_lambda * norm
+            if task == "C4":
+                batch_size, seq_len, _ = outputs.shape
+                outputs.view(batch_size, seq_len, 42, 3)
+                outputs = outputs.reshape(-1, 3)
+                targets = y.reshape(-1)
+                loss = criterion(outputs, targets) + vf_A_norm_lambda * norm
+            else:
+                loss = (
+                    criterion(outputs[mask], y[mask].flatten())
+                    + vf_A_norm_lambda * norm
+                )
 
             loss.backward()
 
@@ -157,15 +168,23 @@ def train_model(
                             mask_val.to(device),
                         )
                         outputs_val = model(X_val)
-                        val_acc += (
-                            (
-                                outputs_val[mask_val].argmax(dim=-1)
-                                == y_val[mask_val].flatten()
+                        if task == "C4":
+                            batch_size, seq_len, _ = outputs_val.shape
+                            outputs_val = outputs_val.view(batch_size, seq_len, 42, 3)
+                            outputs_val = outputs_val.argmax(dim=-1)
+                            correct = outputs_val == y_val
+                            val_acc += correct.all(dim=-1).sum().item()
+                            val_num += batch_size * seq_len
+                        else:
+                            val_acc += (
+                                (
+                                    outputs_val[mask_val].argmax(dim=-1)
+                                    == y_val[mask_val].flatten()
+                                )
+                                .sum()
+                                .item()
                             )
-                            .sum()
-                            .item()
-                        )
-                        val_num += y_val[mask_val].flatten().size(0)
+                            val_num += y_val[mask_val].flatten().size(0)
 
                 if step == 0 and print_steps > 1:
                     total_loss *= print_steps
@@ -291,6 +310,25 @@ def run_experiment(config):
                     yield (X, X_2), (y, y_2), (mask, mask_2)
 
         dataloader = {"train": train_dataloader_multilength(), "val": val_dataloader}
+    elif task == "C4":
+        padding_length = 42
+        if model_name[:8] == "deltanet":
+            padding_length = 65
+        train_dataloader, _, data_dim, label_dim = create_c4_dataloaders(
+            num_samples=25600000,
+            batch_size=batch_size,
+            padding_length=padding_length,
+            train_split=1.0,
+            seed=seed,
+        )
+        val_dataloader, _, _, _ = create_c4_dataloaders(
+            num_samples=8192,
+            batch_size=batch_size,
+            padding_length=padding_length,
+            train_split=1.0,
+            seed=2 * seed,
+        )
+        dataloader = {"train": train_dataloader, "val": val_dataloader}
     elif task[:-1] == "snake":
         num = task[-1]
         train_dataloader, val_dataloader, data_dim, label_dim = (
