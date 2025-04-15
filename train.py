@@ -47,6 +47,7 @@ def train_model(
     learning_rate,
     device,
     early_stop_threshold=1.0,
+    vf_A_norm_lambda=0.0,
     weight_decay_embedding=0.0,
     weight_decay_others=1e-2,
     warmup_fraction=0.1,
@@ -124,7 +125,13 @@ def train_model(
 
             X, y, mask = X.to(device), y.to(device), mask.to(device)
             outputs = model(X)
-            loss = criterion(outputs[mask], y[mask].flatten())
+            # Norm
+            norm = 0
+            for block in model.blocks:
+                if hasattr(block, "LCDE"):
+                    norm += torch.sum(block.LCDE.vf_A**2) ** 0.5
+
+            loss = criterion(outputs[mask], y[mask].flatten()) + vf_A_norm_lambda * norm
 
             loss.backward()
 
@@ -261,6 +268,7 @@ def run_experiment(config):
     dropout_rate = config.get("dropout_rate", 0.01)
     length = config.get("length")
     slstm_at = config.get("slstm_at", [1])
+    vf_A_norm_lambda = config.get("vf_A_norm_lambda", 0.001)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -439,6 +447,7 @@ def run_experiment(config):
         print_steps=print_steps,
         learning_rate=learning_rate,
         early_stop_threshold=early_stop_threshold,
+        vf_A_norm_lambda=vf_A_norm_lambda,
         device=device,
         run=run,
     )

@@ -51,10 +51,10 @@ def generate_sample(min_length, max_length, seed=None):
         right_str, right_val = generate_expression(right_length)
 
         # Sample an operator
-        op = torch.randint(0, 4, (1,)).item()
-        if op == 0:  # Addition
+        op = torch.randint(1, 4, (1,)).item()
+        if op == 1:  # Addition
             return f"({left_str}+{right_str})", (left_val + right_val) % modulus
-        elif op == 1:  # Subtraction
+        elif op == 2:  # Subtraction
             return f"({left_str}-{right_str})", (left_val - right_val) % modulus
         else:  # Multiplication
             return f"({left_str}*{right_str})", (left_val * right_val) % modulus
