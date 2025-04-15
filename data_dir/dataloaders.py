@@ -174,7 +174,7 @@ class FormalLanguageDataset(Dataset):
         num_samples=1000,
         min_length=3,
         max_length=10,
-        generator_seed=1234,
+        seed=1234,
     ):
         """
         Formal Language Dataset capable of generating samples dynamically.
@@ -190,8 +190,8 @@ class FormalLanguageDataset(Dataset):
         self.num_samples = num_samples
         self.min_length = min_length
         self.max_length = max_length
-        self.generator_seed = generator_seed
-        self.generator = random.Random(self.generator_seed)
+        random.seed(seed)
+        self.seeds = [random.randint(0, 2**32 - 1) for _ in range(num_samples)]
         self.generate_sample, self.preprocess, self.data_dim, self.label_dim = (
             self._load_task_module()
         )
@@ -232,7 +232,7 @@ class FormalLanguageDataset(Dataset):
         """Generates a sample on the fly based on the task-specific function."""
         # Generate a single data sample
         sample = self.generate_sample(
-            self.min_length, self.max_length, self.generator_seed + idx
+            self.min_length, self.max_length, seed=self.seeds[idx]
         )
         # Preprocess the sample
         return self.preprocess(sample)
@@ -295,7 +295,11 @@ def create_fl_dataloaders(
     """
     # Initialize the dataset
     dataset = FormalLanguageDataset(
-        task=task, num_samples=num_samples, min_length=min_length, max_length=max_length
+        task=task,
+        num_samples=num_samples,
+        min_length=min_length,
+        max_length=max_length,
+        seed=seed,
     )
 
     def col_fn(batch):
