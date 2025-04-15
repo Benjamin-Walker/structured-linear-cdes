@@ -6,6 +6,8 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset, random_split
 
+from data_dir.C4.generate_games import generate_sample_c4, preprocess_data_c4
+
 
 class A5Dataset(Dataset):
     def __init__(self, length, padding_length=None):
@@ -336,6 +338,106 @@ def create_fl_dataloaders(
     else:
         train_loader = DataLoader(
             dataset, batch_size=batch_size, shuffle=True, collate_fn=col_fn
+        )
+        test_loader = None
+
+    return train_loader, test_loader, data_dim, label_dim
+
+
+class C4Dataset(Dataset):
+    """
+    Dataset class that generates Connect 4 samples on the fly.
+    Each sample is created via generate_sample_c4(...) and then
+    preprocessed with preprocess_data_c4(...).
+    """
+
+    def __init__(self, num_samples=1000, seed=1234):
+        """
+        Args:
+            num_samples (int): Number of (game) samples to generate.
+            seed (int): Seed for reproducibility.
+        """
+        super().__init__()
+        self.num_samples = num_samples
+
+        # Use Python's random to sample seeds for each sample
+        random.seed(seed)
+        self.seeds = [random.randint(0, 2**32 - 1) for _ in range(num_samples)]
+
+    def __len__(self):
+        return self.num_samples
+
+    def __getitem__(self, idx):
+        """
+        Generate one Connect Four sample. Then preprocess.
+        """
+        seed_for_this_sample = self.seeds[idx]
+
+        # generate_sample_c4 expects seed (and sets np/random/torch seeds as needed)
+        sample = generate_sample_c4(seed_for_this_sample)
+        return preprocess_data_c4(sample)
+
+
+def create_c4_dataloaders(
+    num_samples=1000, batch_size=32, padding_length=None, train_split=0.8, seed=1234
+):
+    """
+    Creates DataLoader objects for Connect Four data.
+
+    Args:
+        num_samples (int): Number of game samples to generate.
+        batch_size (int): Batch size for the DataLoader.
+        padding_length (int or None): If not None, force sequences to pad to this length.
+        train_split (float): Fraction of data to use for training (remainder is test).
+        seed (int): Random seed for dataset shuffling and generation.
+
+    Returns:
+        (train_loader, test_loader, data_dim, label_dim)
+    """
+    # Initialize dataset
+    dataset = C4Dataset(num_samples=num_samples, seed=seed)
+
+    # We'll wrap the original collate_fn so we can set padding_length each time
+    def col_fn(batch):
+        return collate_fn(batch, padding_length=padding_length)
+
+    # - data_dim = 8  (tokens: columns 1..7 plus 0 for padding)
+    data_dim = 8
+    label_dim = 126
+
+    if train_split < 1.0:
+        # Split into train/test
+        train_size = int(train_split * len(dataset))
+        test_size = len(dataset) - train_size
+
+        train_dataset, test_dataset = random_split(
+            dataset,
+            [train_size, test_size],
+            generator=torch.Generator().manual_seed(seed),
+        )
+
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            collate_fn=col_fn,
+            num_workers=0,  # adjust if needed
+        )
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            collate_fn=col_fn,
+            num_workers=0,
+        )
+    else:
+        # No test set, everything is train
+        train_loader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            collate_fn=col_fn,
+            num_workers=0,
         )
         test_loader = None
 
