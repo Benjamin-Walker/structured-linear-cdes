@@ -184,7 +184,7 @@ class FormalLanguageDataset(Dataset):
             num_samples (int): Number of samples in the dataset.
             min_length (int): Minimum length of the sequences.
             max_length (int): Maximum length of the sequences.
-            generator_seed (int): Seed for random number generator.
+            seed (int): Seed for random number generator.
         """
         self.task = task
         self.num_samples = num_samples
