@@ -59,9 +59,12 @@ class Block(nn.Module):
                 num_householder=rank,
                 use_forget_gate=gated,
                 allow_neg_eigval=True,
+                layer_idx=layer_idx,
             ).bfloat16()
         else:
-            self.layer = layer_map[self.layer_type](hidden_size=model_dim).bfloat16()
+            self.layer = layer_map[self.layer_type](
+                hidden_size=model_dim, layer_idx=layer_idx
+            ).bfloat16()
 
         self.norm = nn.LayerNorm(model_dim)
         self.drop = nn.Dropout(p=dropout_rate)
