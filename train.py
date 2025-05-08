@@ -280,6 +280,7 @@ def run_experiment(config):
     fwht = config.get("fwht", False)
     use_glu = config.get("use_glu", False)
     second_embedding = config.get("second_embedding", False)
+    gated = config.get("gated", True)
     early_stop_threshold = config.get("early_stop_threshold", 1.0)
     init_std = config.get("init_std", 1.0)
     block_size = config.get("block_size", 1)
@@ -288,6 +289,7 @@ def run_experiment(config):
     length = config.get("length")
     slstm_at = config.get("slstm_at", [1])
     vf_A_norm_lambda = config.get("vf_A_norm_lambda", 0.001)
+    rank = config.get("rank", 1)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -381,7 +383,7 @@ def run_experiment(config):
             use_glu=use_glu,
             second_embedding=second_embedding,
         )
-    elif model_name in ["deltanet", "gateddeltanet", "rwkv7", "rwkv6"]:
+    elif model_name in ["deltanet", "gateddeltanet", "rwkv7", "rwkv6", "deltaproduct"]:
         from models.fla import StackedBlock
 
         model = StackedBlock(
@@ -393,6 +395,8 @@ def run_experiment(config):
             dropout_rate=dropout_rate,
             use_glu=use_glu,
             second_embedding=second_embedding,
+            rank=rank,
+            gated=gated,
         )
     elif model_name in ["deltanet2"]:
         from models.deltanet2 import StackedBlock
