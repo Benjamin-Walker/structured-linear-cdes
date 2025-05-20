@@ -1,7 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fla.layers import DeltaNet, GatedDeltaNet, RWKV6Attention, RWKV7Attention
+from fla.layers import (
+    DeltaNet,
+    GatedDeltaNet,
+    GatedDeltaProduct,
+    RWKV6Attention,
+    RWKV7Attention,
+)
 
 
 class Block(nn.Module):
@@ -16,6 +22,8 @@ class Block(nn.Module):
         layer_idx: int = 0,
         layer_type: str = "deltanet",
         dropout_rate: float = 0.1,
+        rank: int = 1,
+        gated: bool = True,
         use_glu: bool = False,
     ):
         super().__init__()
@@ -29,6 +37,7 @@ class Block(nn.Module):
             "gateddeltanet": GatedDeltaNet,
             "rwkv7": RWKV7Attention,
             "rwkv6": RWKV6Attention,
+            "deltaproduct": GatedDeltaProduct,
         }
         if self.layer_type not in layer_map:
             raise ValueError(
@@ -44,8 +53,18 @@ class Block(nn.Module):
                 hidden_size=model_dim,
                 layer_idx=layer_idx,  # so the RWKV7 layer can see its index
             ).bfloat16()
+        elif self.layer_type == "deltaproduct":
+            self.layer = layer_map[self.layer_type](
+                hidden_size=model_dim,
+                num_householder=rank,
+                use_forget_gate=gated,
+                allow_neg_eigval=True,
+                layer_idx=layer_idx,
+            ).bfloat16()
         else:
-            self.layer = layer_map[self.layer_type](hidden_size=model_dim).bfloat16()
+            self.layer = layer_map[self.layer_type](
+                hidden_size=model_dim, layer_idx=layer_idx
+            ).bfloat16()
 
         self.norm = nn.LayerNorm(model_dim)
         self.drop = nn.Dropout(p=dropout_rate)
@@ -106,6 +125,8 @@ class StackedBlock(nn.Module):
         label_dim: int,
         layer_type: str = "deltanet",
         dropout_rate: float = 0.1,
+        rank: int = 1,
+        gated: bool = True,
         use_glu: bool = False,
         second_embedding: bool = False,
     ):
@@ -126,6 +147,8 @@ class StackedBlock(nn.Module):
                     layer_type=layer_type,
                     dropout_rate=dropout_rate,
                     use_glu=use_glu,
+                    rank=rank,
+                    gated=gated,
                 )
                 for i in range(num_blocks)
             ]
