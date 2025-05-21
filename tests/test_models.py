@@ -158,7 +158,6 @@ def test_linearcde_init_std():
 
     init_layer_weight_stds = []
     init_layer_bias_stds = []
-    vf_B_weight_stds = []
     vf_A_stds = []
 
     # We'll create multiple LinearCDE instances to gather stats
@@ -166,7 +165,6 @@ def test_linearcde_init_std():
         linear_cde = LinearCDE(input_dim, hidden_dim, init_std=init_std)
         init_layer_weight_stds.append(linear_cde.init_layer.weight.std().item())
         init_layer_bias_stds.append(linear_cde.init_layer.bias.std().item())
-        vf_B_weight_stds.append(linear_cde.vf_B.weight.std().item())
         vf_A_stds.append(linear_cde.vf_A.weight.std().item())
 
     # Check the approximate means of the distributions
@@ -175,9 +173,6 @@ def test_linearcde_init_std():
     )
     assert torch.isclose(
         torch.tensor(init_layer_bias_stds).mean(), torch.tensor(init_std), atol=0.01
-    )
-    assert torch.isclose(
-        torch.tensor(vf_B_weight_stds).mean(), torch.tensor(init_std), atol=0.01
     )
     assert torch.isclose(
         torch.tensor(vf_A_stds).mean(),
@@ -211,58 +206,3 @@ def test_linearcde_sparsity():
             assert torch.isclose(
                 torch.tensor(actual_sparsity), torch.tensor(sparsity), atol=0.01
             )
-
-
-def test_linearcde_scan_vs_recurrent():
-    """
-    Check that LinearCDE's scan_forward and recurrent_forward produce the same results
-    for different configurations (diagonal / FWHT).
-    """
-    batch_size = 2
-    seq_len = 5
-    input_dim = 4
-    hidden_dim = 8
-
-    # We'll test three configurations:
-    # 1. diagonal=False, fwht=False
-    # 2. diagonal=True, fwht=False
-    # 3. diagonal=False, fwht=True
-    configs = [
-        {"diagonal": False, "fwht": False},
-        {"diagonal": True, "fwht": False},
-        {"diagonal": True, "fwht": True},
-    ]
-
-    for cfg in configs:
-        diagonal = cfg["diagonal"]
-        fwht = cfg["fwht"]
-
-        # Build the model
-        model = LinearCDE(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            diagonal=diagonal,
-            fwht=fwht,
-        )
-
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        model.to(device)
-
-        # Dummy input
-        X = torch.randn(batch_size, seq_len, input_dim).to(device)
-
-        # Forward pass using .recurrent_forward
-        with torch.no_grad():
-            y_recur = model.recurrent_forward(X)
-            # Forward pass using .scan_forward
-            y_scan = model.scan_forward(X)
-
-        # Check shape is the same
-        assert y_recur.shape == y_scan.shape, (
-            f"Shape mismatch: " f"recurrent {y_recur.shape} vs scan {y_scan.shape}"
-        )
-        # Check values are close
-        assert torch.allclose(
-            y_recur, y_scan, rtol=1e-5, atol=1e-5
-        ), f"Scan vs Recurrent mismatch for diagonal={diagonal}, fwht={fwht}"

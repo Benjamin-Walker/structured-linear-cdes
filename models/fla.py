@@ -46,12 +46,11 @@ class Block(nn.Module):
             )
 
         # Instantiate the chosen layer
-        # For RWKV7 specifically, we can pass in layer_idx if needed
         if self.layer_type == "rwkv7" or self.layer_type == "rwkv6":
             self.layer = layer_map[self.layer_type](
                 mode="chunk",
                 hidden_size=model_dim,
-                layer_idx=layer_idx,  # so the RWKV7 layer can see its index
+                layer_idx=layer_idx,
             ).bfloat16()
         elif self.layer_type == "deltaproduct":
             self.layer = layer_map[self.layer_type](

@@ -1,17 +1,17 @@
 {
-  "task": "reverse_string",
+  "task": "cycle_nav",
   "model_name": "lcde",
   "num_blocks": 2,
-  "model_dim": 512,
+  "model_dim": 128,
   "batch_size": 256,
   "num_steps": 100001,
   "print_steps": 5000,
   "learning_rate": 0.002,
-  "early_stopping_threshold": 0.9995,
-  "block_size": 1,
+  "early_stop_threshold": 0.9995,
+  "block_size": 4,
+  "init_std": 0.5,
   "diagonal": true,
-  "fwht": true,
+  "fwht": false,
   "use_glu": false,
   "seed": 1234
 }
-

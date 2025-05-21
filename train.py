@@ -12,9 +12,7 @@ import torch.optim as optim
 # Local imports
 from data_dir.dataloaders import (
     create_a5_dataloaders,
-    create_c4_dataloaders,
     create_fl_dataloaders,
-    create_snake_dataloaders,
 )
 from models.lr_scheduler import LinearWarmupCosineAnnealing
 
@@ -83,6 +81,9 @@ def train_model(
         val_accs (list[float]): Validation accuracies per print step.
         early_stop (bool): Whether early stopping was triggered.
     """
+
+    time_str = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
     model.to(device)
     embedding_params = [p for n, p in model.named_parameters() if "embedding" in n]
     other_params = [p for n, p in model.named_parameters() if "embedding" not in n]
@@ -214,20 +215,16 @@ def train_model(
                     "timestamp": timestamp_str,
                 }
 
-                checkpoint_filename = (
-                    f"checkpoint_{task}_{model_name}_{model_dim}_{block_size}_{run}.pt"
-                )
+                checkpoint_filename = f"checkpoint_{task}_{model_name}_{time_str}.pt"
                 checkpoint_path = os.path.join("checkpoints", checkpoint_filename)
                 torch.save(checkpoint, checkpoint_path)
                 print(f"Saved model checkpoint to: {checkpoint_path}")
 
                 early_stop = accuracy > early_stop_threshold
 
-                out_filename = (
-                    f"results_{task}_{model_name}_{model_dim}_{block_size}_{run}.json"
-                )
+                out_filename = f"results_{task}_{model_name}_{time_str}.json"
 
-                out_path = os.path.join("results_repeats", out_filename)
+                out_path = os.path.join("results", out_filename)
 
                 # Gather all relevant info to save:
                 results_dict = {
@@ -289,19 +286,28 @@ def run_experiment(config):
     length = config.get("length")
     slstm_at = config.get("slstm_at", [1])
     vf_A_norm_lambda = config.get("vf_A_norm_lambda", 0.001)
-    rank = config.get("rank", 1)
+    rank = config.get("rank", 0)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Create DataLoader(s)
     if task == "A5":
+        train_padding_length = length
+        if model_name[:8] == "deltanet" or model_name == "deltaproduct":
+            train_padding_length = 65
         train_dataloader, val_dataloader, data_dim, label_dim = create_a5_dataloaders(
-            length=length, train_split=0.8, batch_size=batch_size, padding_length=65
+            length=length,
+            train_split=0.8,
+            batch_size=batch_size,
+            padding_length=train_padding_length,
         )
 
         # Optional: combining with length=2 if needed
         dataloader_length2, _, _, _ = create_a5_dataloaders(
-            2, train_split=1.0, batch_size=batch_size // 10, padding_length=65
+            2,
+            train_split=1.0,
+            batch_size=batch_size // 10,
+            padding_length=train_padding_length,
         )
 
         def train_dataloader_multilength():
@@ -312,36 +318,6 @@ def run_experiment(config):
                     yield (X, X_2), (y, y_2), (mask, mask_2)
 
         dataloader = {"train": train_dataloader_multilength(), "val": val_dataloader}
-    elif task == "C4":
-        padding_length = 42
-        if model_name[:8] == "deltanet":
-            padding_length = 65
-        train_dataloader, _, data_dim, label_dim = create_c4_dataloaders(
-            num_samples=25600000,
-            batch_size=batch_size,
-            padding_length=padding_length,
-            train_split=1.0,
-            seed=seed,
-        )
-        val_dataloader, _, _, _ = create_c4_dataloaders(
-            num_samples=8192,
-            batch_size=batch_size,
-            padding_length=padding_length,
-            train_split=1.0,
-            seed=2 * seed,
-        )
-        dataloader = {"train": train_dataloader, "val": val_dataloader}
-    elif task[:-1] == "snake":
-        num = task[-1]
-        train_dataloader, val_dataloader, data_dim, label_dim = (
-            create_snake_dataloaders(
-                pt_file=f"data_dir/snake_games_{num}/snake_merged.pt",
-                batch_size=batch_size,
-                train_split=0.999,
-            )
-        )
-
-        dataloader = {"train": train_dataloader, "val": val_dataloader}
     else:
         train_padding_length = 256
         if model_name == "lcde":
@@ -428,6 +404,7 @@ def run_experiment(config):
             diagonal=diagonal,
             fwht=fwht,
             second_embedding=second_embedding,
+            rank=rank,
         )
     elif model_name == "lstm":
         from models.lstm import LSTM

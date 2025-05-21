@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from fast_hadamard_transform.fast_hadamard_transform_interface import hadamard_transform
-from torch._higher_order_ops.associative_scan import associative_scan
 
 torch.set_float32_matmul_precision("high")
 
@@ -56,6 +55,7 @@ class LinearCDE(nn.Module):
         dt=1.0 / 40,
         diagonal=False,
         fwht=False,
+        rank=0,
     ):
         super().__init__()
         self.input_dim = input_dim
@@ -63,6 +63,7 @@ class LinearCDE(nn.Module):
         self.diagonal = diagonal
         self.fwht = fwht
         self.dt = dt
+        self.rank = rank
 
         if self.fwht:
             self.hadamard = hadamard_matrix(hidden_dim).to(torch.device("cuda")) / (
@@ -79,19 +80,24 @@ class LinearCDE(nn.Module):
                 torch.randn(input_dim + 1, hidden_dim * self.block_size)
                 * (init_std / (self.block_size**0.5))
             )
+            if rank > 0:
+                self.vf_A_u = torch.nn.Parameter(
+                    torch.randn(input_dim + 1, hidden_dim * rank)
+                    * (init_std / (rank**0.5))
+                )
+                self.vf_A_v = torch.nn.Parameter(
+                    torch.randn(input_dim + 1, hidden_dim * rank)
+                    * (init_std / (rank**0.5))
+                )
         else:
             self.vf_A = nn.Linear(input_dim + 1, hidden_dim * hidden_dim, bias=False)
             nn.init.normal_(
                 self.vf_A.weight, mean=0.0, std=init_std / (hidden_dim**0.5)
             )
-        self.vf_B = nn.Linear(input_dim + 1, hidden_dim, bias=False)
-        nn.init.normal_(self.vf_B.weight, mean=0.0, std=init_std)
 
         # Apply custom weight initialization
         nn.init.normal_(self.init_layer.weight, mean=0.0, std=init_std)
         nn.init.normal_(self.init_layer.bias, mean=0.0, std=init_std)
-        # Scaled by sqrt(hidden_dim) to reduce variance
-        nn.init.normal_(self.vf_B.weight, mean=0.0, std=init_std)
 
         # Register a buffer to store the mask on the same device as the module
         self.register_buffer("mask", self._sparse_mask(sparsity))
@@ -121,7 +127,7 @@ class LinearCDE(nn.Module):
             if self.vf_A.weight.grad is not None:
                 self.vf_A.weight.grad *= self.mask
 
-    def recurrent_forward(self, X: torch.Tensor) -> torch.Tensor:
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
         """
         Forward pass:
           1. Adds a uniform time channel (1 / (seq_len - 1)).
@@ -156,13 +162,20 @@ class LinearCDE(nn.Module):
         ys[:, 0] = y0
         y = y0
 
-        # Precompute B offsets for steps 1..(seq_len-1)
-        Bs = self.vf_B(inp[:, 1:])  # shape: (batch_size, seq_len-1, hidden_dim)
-
         # Recurrently compute the hidden states
         for i in range(1, seq_len):
             if self.diagonal:
-                if self.fwht:
+                if self.rank > 0:
+                    diag = (inp[:, i] @ self.vf_A) * y
+                    U = (inp[:, i] @ self.vf_A_u).reshape(
+                        -1, self.hidden_dim, self.rank
+                    )
+                    V = (inp[:, i] @ self.vf_A_v).reshape(
+                        -1, self.hidden_dim, self.rank
+                    )
+                    z = torch.bmm(V.transpose(1, 2), y.unsqueeze(-1)).squeeze(-1)
+                    state_transition = diag + torch.bmm(U, z.unsqueeze(-1)).squeeze(-1)
+                elif self.fwht:
                     state_transition = (inp[:, i] @ torch.tanh(self.vf_A)) * y
                     state_transition = hadamard_transform(
                         state_transition, scale=1.0 / (self.hidden_dim**0.5)
@@ -186,234 +199,17 @@ class LinearCDE(nn.Module):
                         ).view(-1, self.hidden_dim)
                     else:
                         state_transition = (inp[:, i] @ self.vf_A) * y
-                state_transition = state_transition + Bs[:, i - 1]
             else:
                 A = self.vf_A(inp[:, i])
-                state_transition = (
-                    torch.einsum(
-                        "bij,bj->bi",
-                        A.view(-1, self.hidden_dim, self.hidden_dim),
-                        y,
-                    )
-                    + Bs[:, i - 1]
+                state_transition = torch.einsum(
+                    "bij,bj->bi",
+                    A.view(-1, self.hidden_dim, self.hidden_dim),
+                    y,
                 )
             y = y + 10e10 * torch.tanh(state_transition / 10e10)
             ys[:, i] = y
 
         return ys
-
-    def scan_forward(self, X: torch.Tensor) -> torch.Tensor:
-        """
-        Uses an associative scan to compute the hidden states of the CDE in a single pass.
-
-        Args:
-            X (torch.Tensor): shape (batch_size, seq_len, input_dim)
-
-        Returns:
-            torch.Tensor: shape (batch_size, seq_len, hidden_dim)
-        """
-        batch_size, seq_len, _ = X.shape
-        if seq_len < 2:
-            raise ValueError(
-                "Sequence length must be at least 2 for uniform time increments."
-            )
-
-        # 1) Add increments of time as first channel and scale by dt
-        ts = torch.full((batch_size, seq_len, 1), 1.0, device=X.device)
-        inp = torch.cat((ts, X), dim=-1)  # (batch_size, seq_len, input_dim+1)
-        inp = inp * self.dt
-
-        # 2) Initial hidden state
-        x0 = X[:, 0, :]  # (batch_size, input_dim)
-        y0 = self.init_layer(x0)  # (batch_size, hidden_dim)
-
-        # The scan approach changes if fwht is True or if we're not diagonal
-        if self.fwht or not self.diagonal:
-            # Matrix A for each step
-            if self.fwht:
-                # As = (batch_size, seq_len-1, hidden_dim)
-                # We then broadcast hadamard to become the shape used in multiplication
-                As = inp[:, 1:] @ torch.tanh(self.vf_A)
-                As = self.hadamard.unsqueeze(0).unsqueeze(0) * As.unsqueeze(-2)
-            else:
-                # As = (batch_size, seq_len-1, hidden_dim, hidden_dim)
-                As = self.vf_A(inp[:, 1:]).reshape(
-                    batch_size, seq_len - 1, self.hidden_dim, self.hidden_dim
-                )
-
-            # Add identity to As
-            # eye = (1, 1, hidden_dim, hidden_dim)
-            eye = torch.eye(self.hidden_dim, device=X.device).unsqueeze(0).unsqueeze(0)
-            As = As + eye
-
-            # Vector B for each step
-            # Bs = (batch_size, seq_len-1, hidden_dim)
-            Bs = self.vf_B(inp[:, 1:])
-
-            # Homogenize to (hidden_dim+1) x (hidden_dim+1)
-            # eye_row = (batch_size, seq_len-1, 1, hidden_dim+1)
-            eye_row = torch.zeros(
-                batch_size, seq_len - 1, 1, self.hidden_dim + 1, device=X.device
-            )
-            eye_row[:, :, :, -1] = 1.0
-
-            # M = (batch_size, seq_len-1, hidden_dim, hidden_dim + 1)
-            M = torch.cat([As, Bs.unsqueeze(3)], dim=3)
-            # M = (batch_size, seq_len-1, hidden_dim + 1, hidden_dim + 1)
-            M = torch.cat([M, eye_row], dim=2)
-
-            # Transpose so we can do an associative scan along seq_len-1
-            M = M.transpose(0, 1)  # (seq_len-1, batch_size, hidden_dim+1, hidden_dim+1)
-
-            # Define matrix-multiplication composition for scan
-            def compose(x, y):
-                return torch.bmm(y, x)
-
-            # partial_products = (seq_len-1, batch_size, hidden_dim+1, hidden_dim+1)
-            partial_products = associative_scan(
-                compose, M, dim=0, combine_mode="generic"
-            )
-
-            # Apply partial_products to initial state
-            # Homogenize y0: (batch_size, hidden_dim+1, 1)
-            ones_col = torch.ones(batch_size, 1, device=X.device)
-            y0_hom = torch.cat([y0, ones_col], dim=1).unsqueeze(-1)
-
-            # Reshape partial_products so we can batch-multiply
-            partial_reshaped = partial_products.view(
-                (seq_len - 1) * batch_size, self.hidden_dim + 1, self.hidden_dim + 1
-            )
-
-            # Expand y0_hom to match partial_reshaped
-            y0_exp = (
-                y0_hom.unsqueeze(0)
-                .expand(seq_len - 1, -1, -1, -1)
-                .reshape((seq_len - 1) * batch_size, self.hidden_dim + 1, 1)
-            )
-
-            # Resulting hidden states: (seq_len-1, batch_size, hidden_dim + 1)
-            y = torch.bmm(partial_reshaped, y0_exp).view(
-                seq_len - 1, batch_size, self.hidden_dim + 1
-            )
-
-            # Remove the homogenizing dimension
-            y = y[:, :, :-1]  # (seq_len-1, batch_size, hidden_dim)
-
-            # Swap batch and seq
-            y = y.transpose(0, 1)  # (batch_size, seq_len-1, hidden_dim)
-
-            # Prepend the initial state
-            y = torch.cat(
-                [y0.unsqueeze(1), y], dim=1
-            )  # (batch_size, seq_len, hidden_dim)
-
-        else:
-            # Number of (block_size x block_size) blocks
-            num_blocks = self.hidden_dim // self.block_size
-
-            # Matrix A for each step
-            # As = (batch_size, seq_len-1, num_blocks, block_size, block_size)
-            As = (inp[:, 1:] @ self.vf_A).reshape(
-                batch_size, seq_len - 1, num_blocks, self.block_size, self.block_size
-            )
-
-            # Add identity to As along each block
-            # eye = (1, 1, 1, block_size, block_size)
-            eye = (
-                torch.eye(self.block_size, device=X.device)
-                .unsqueeze(0)
-                .unsqueeze(0)
-                .unsqueeze(0)
-            )
-            As = As + eye
-
-            # Vector B for each step
-            # Bs = (batch_size, seq_len-1, num_blocks, block_size)
-            Bs = self.vf_B(inp[:, 1:]).reshape(
-                batch_size, seq_len - 1, num_blocks, self.block_size
-            )
-
-            # Homogenize each (block_size + 1) x (block_size + 1) block
-            # eye_row = (batch_size, seq_len-1, num_blocks, 1, block_size + 1)
-            eye_row = torch.zeros(
-                batch_size,
-                seq_len - 1,
-                num_blocks,
-                1,
-                self.block_size + 1,
-                device=X.device,
-            )
-            eye_row[:, :, :, :, -1] = 1.0
-
-            # M = (batch_size, seq_len-1, num_blocks, block_size, block_size + 1)
-            M = torch.cat([As, Bs.unsqueeze(4)], dim=4)
-            # M = (batch_size, seq_len-1, num_blocks, block_size + 1, block_size + 1)
-            M = torch.cat([M, eye_row], dim=3)
-
-            # Transpose so we can do an associative scan along seq_len-1
-            # M = (seq_len-1, batch_size, num_blocks, block_size + 1, block_size + 1)
-            M = M.transpose(0, 1)
-
-            # Flatten batch_size x num_blocks for matrix multiplication
-            M = M.reshape(
-                seq_len - 1,
-                batch_size * num_blocks,
-                self.block_size + 1,
-                self.block_size + 1,
-            )
-
-            # Define matrix-multiplication composition for scan
-            def compose(x, y):
-                return torch.bmm(y, x)
-
-            partial_products = associative_scan(
-                compose, M, dim=0, combine_mode="generic"
-            )
-
-            # Apply partial_products to initial state
-            # Reshape y0 into blocks: (batch_size, num_blocks, block_size)
-            y0 = y0.view(batch_size, num_blocks, self.block_size)
-
-            # Homogenize: (batch_size, num_blocks, block_size+1, 1)
-            ones_col = torch.ones(batch_size, num_blocks, 1, device=X.device)
-            y0_hom = torch.cat([y0, ones_col], dim=2).unsqueeze(-1)
-
-            # Reshape partial_products so we can batch-multiply
-            partial_reshaped = partial_products.view(
-                (seq_len - 1) * batch_size * num_blocks,
-                self.block_size + 1,
-                self.block_size + 1,
-            )
-
-            # Expand y0_hom to match partial_reshaped
-            y0_exp = (
-                y0_hom.unsqueeze(0)
-                .expand(seq_len - 1, -1, -1, -1, -1)
-                .reshape(
-                    (seq_len - 1) * batch_size * num_blocks, self.block_size + 1, 1
-                )
-            )
-
-            # y = (seq_len-1, batch_size, num_blocks, block_size + 1)
-            y = torch.bmm(partial_reshaped, y0_exp).view(
-                seq_len - 1, batch_size, num_blocks, self.block_size + 1
-            )
-
-            # Slice out the homogenizing dimension
-            y = y[:, :, :, :-1]  # (seq_len-1, batch_size, num_blocks, block_size)
-
-            # Reshape back to (batch_size, seq_len-1, hidden_dim)
-            y = y.transpose(0, 1).reshape(batch_size, seq_len - 1, self.hidden_dim)
-
-            # Prepend the initial state
-            y = torch.cat(
-                [y0.view(batch_size, 1, self.hidden_dim), y], dim=1
-            )  # (batch_size, seq_len, hidden_dim)
-
-        return y
-
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
-        return self.recurrent_forward(X)
 
 
 class LinearCDEBlock(nn.Module):
@@ -455,6 +251,7 @@ class LinearCDEBlock(nn.Module):
         use_glu: bool = False,
         diagonal=False,
         fwht=False,
+        rank=0,
     ):
         super().__init__()
         self.LCDE = LinearCDE(
@@ -465,6 +262,7 @@ class LinearCDEBlock(nn.Module):
             sparsity=sparsity,
             diagonal=diagonal,
             fwht=fwht,
+            rank=rank,
         )
         self.norm = nn.LayerNorm(input_dim)
 
@@ -554,6 +352,7 @@ class StackedLCDE(nn.Module):
         diagonal=False,
         fwht=False,
         second_embedding=False,
+        rank=0,
     ):
         super().__init__()
         self.second_embedding = second_embedding
@@ -575,6 +374,7 @@ class StackedLCDE(nn.Module):
                     use_glu=use_glu,
                     diagonal=diagonal,
                     fwht=fwht,
+                    rank=rank,
                 )
                 for _ in range(num_blocks)
             ]

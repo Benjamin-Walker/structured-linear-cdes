@@ -1,3 +1,4 @@
+import random
 from unittest.mock import MagicMock, patch
 
 import torch
@@ -49,10 +50,9 @@ mock_batch_size = 2
 
 
 # Define the side effect functions outside the tests to reuse
-def generate_sample_side_effect(min_len, max_len, seed=None):
+def generate_sample_side_effect(min_length, max_length, seed=None):
     """Mocked generate_sample function to produce consistent outputs."""
     # Use the generator's state to ensure consistent outputs
-    # index = gen.randint(0, mock_num_samples - 1)
     if seed is not None:
         torch.manual_seed(seed)
     index = torch.randint(0, mock_num_samples, (1,)).item()
@@ -87,13 +87,16 @@ def test_formal_language_dataset_init(mock_load_task_module):
         num_samples=mock_num_samples,
         min_length=mock_min_length,
         max_length=mock_max_length,
-        generator_seed=0,
+        seed=0,
     )
+
+    random.seed(0)
+    seeds = [random.randint(0, 2**32 - 1) for _ in range(mock_num_samples)]
 
     # Assertions to check if the dataset is loaded correctly
     assert len(dataset) == mock_num_samples
     for i in range(mock_num_samples):
-        torch.manual_seed(i)
+        torch.manual_seed(seeds[i])
         index = torch.randint(0, mock_num_samples, (1,)).item()
         assert dataset[i] == mock_tensors[index]
 
