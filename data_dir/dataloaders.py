@@ -6,8 +6,6 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset, random_split
 
-from data_dir.C4.generate_games import generate_sample_c4, preprocess_data_c4
-
 
 class A5Dataset(Dataset):
     def __init__(self, length, padding_length=None):
@@ -84,86 +82,6 @@ def create_a5_dataloaders(
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=shuffle)
     else:
         train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-        test_loader = None
-
-    return train_loader, test_loader, data_dim, label_dim
-
-
-class SnakeDataset(Dataset):
-    """
-    Loads a pre-saved .pt containing a list of (x, y, mask) for entire Snake games.
-
-    Each item = (x, y, mask):
-      - x: [seq_len, 2], y: [seq_len], mask: [seq_len]
-    """
-
-    def __init__(self, pt_file):
-        super().__init__()
-        # Load the entire preprocessed list from .pt
-        self.examples = torch.load(pt_file)  # a list of (x, y, mask)
-        # data_dim is number of unique items in x
-        self.data_dim = len(torch.unique(self.examples[0][0][:, 0]))
-        self.label_dim = len(torch.unique(self.examples[0][1]))
-
-    def __len__(self):
-        return len(self.examples)
-
-    def __getitem__(self, idx):
-        return self.examples[idx]
-
-
-def snake_collate_fn(batch):
-    """
-    Collate variable-length sequences, padding them.
-    batch: list of (x, y, mask) for each example (Snake game).
-    Output shape:
-      padded_x: [B, max_seq_len, 2]
-      padded_y: [B, max_seq_len]
-      padded_m: [B, max_seq_len]
-    """
-    xs, ys, masks = zip(*batch)  # each is a (seq_len,2), (seq_len), (seq_len)
-    padded_x = pad_sequence(xs, batch_first=True, padding_value=0)
-    padded_y = pad_sequence(ys, batch_first=True, padding_value=0)
-    padded_m = pad_sequence(masks, batch_first=True, padding_value=0)
-
-    return padded_x, padded_y, padded_m
-
-
-def create_snake_dataloaders(
-    pt_file, train_split=0.8, batch_size=4, seed=1234, shuffle=True
-):
-    """
-    Creates DataLoaders from a .pt that contains a list of (x, y, mask).
-    Returns train_loader, test_loader, data_dim, label_dim
-    """
-    dataset = SnakeDataset(pt_file)
-    data_dim = dataset.data_dim
-    label_dim = dataset.label_dim
-
-    if train_split < 1.0:
-        train_size = int(train_split * len(dataset))
-        test_size = len(dataset) - train_size
-        train_dataset, test_dataset = random_split(
-            dataset,
-            [train_size, test_size],
-            generator=torch.Generator().manual_seed(seed),
-        )
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            collate_fn=snake_collate_fn,
-        )
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            collate_fn=snake_collate_fn,
-        )
-    else:
-        train_loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=snake_collate_fn
-        )
         test_loader = None
 
     return train_loader, test_loader, data_dim, label_dim
@@ -338,106 +256,6 @@ def create_fl_dataloaders(
     else:
         train_loader = DataLoader(
             dataset, batch_size=batch_size, shuffle=True, collate_fn=col_fn
-        )
-        test_loader = None
-
-    return train_loader, test_loader, data_dim, label_dim
-
-
-class C4Dataset(Dataset):
-    """
-    Dataset class that generates Connect 4 samples on the fly.
-    Each sample is created via generate_sample_c4(...) and then
-    preprocessed with preprocess_data_c4(...).
-    """
-
-    def __init__(self, num_samples=1000, seed=1234):
-        """
-        Args:
-            num_samples (int): Number of (game) samples to generate.
-            seed (int): Seed for reproducibility.
-        """
-        super().__init__()
-        self.num_samples = num_samples
-
-        # Use Python's random to sample seeds for each sample
-        random.seed(seed)
-        self.seeds = [random.randint(0, 2**32 - 1) for _ in range(num_samples)]
-
-    def __len__(self):
-        return self.num_samples
-
-    def __getitem__(self, idx):
-        """
-        Generate one Connect Four sample. Then preprocess.
-        """
-        seed_for_this_sample = self.seeds[idx]
-
-        # generate_sample_c4 expects seed (and sets np/random/torch seeds as needed)
-        sample = generate_sample_c4(seed_for_this_sample)
-        return preprocess_data_c4(sample)
-
-
-def create_c4_dataloaders(
-    num_samples=1000, batch_size=32, padding_length=None, train_split=0.8, seed=1234
-):
-    """
-    Creates DataLoader objects for Connect Four data.
-
-    Args:
-        num_samples (int): Number of game samples to generate.
-        batch_size (int): Batch size for the DataLoader.
-        padding_length (int or None): If not None, force sequences to pad to this length.
-        train_split (float): Fraction of data to use for training (remainder is test).
-        seed (int): Random seed for dataset shuffling and generation.
-
-    Returns:
-        (train_loader, test_loader, data_dim, label_dim)
-    """
-    # Initialize dataset
-    dataset = C4Dataset(num_samples=num_samples, seed=seed)
-
-    # We'll wrap the original collate_fn so we can set padding_length each time
-    def col_fn(batch):
-        return collate_fn(batch, padding_length=padding_length)
-
-    # - data_dim = 8  (tokens: columns 1..7 plus 0 for padding)
-    data_dim = 8
-    label_dim = 126
-
-    if train_split < 1.0:
-        # Split into train/test
-        train_size = int(train_split * len(dataset))
-        test_size = len(dataset) - train_size
-
-        train_dataset, test_dataset = random_split(
-            dataset,
-            [train_size, test_size],
-            generator=torch.Generator().manual_seed(seed),
-        )
-
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            collate_fn=col_fn,
-            num_workers=0,  # adjust if needed
-        )
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            collate_fn=col_fn,
-            num_workers=0,
-        )
-    else:
-        # No test set, everything is train
-        train_loader = DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            collate_fn=col_fn,
-            num_workers=0,
         )
         test_loader = None
 
