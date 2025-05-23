@@ -1,13 +1,17 @@
 <h1 align="center">Structured Linear Controlled Differential Equations: Maximally Expressive and Parallel-in-Time Sequence Models</h1>
 <h2 align="center"><em>Don't be Dense, SLiCE the Cost!</em></h2>
 
-Structured Linear Controlled Differential Equations (SLiCEs) are a new class of sequence models that combine the maximal expressivity of dense, input-dependent, state-transition matrices with the computational efficiency of structured alternatives. The SLiCE framework generalises and extends architectures such as DeltaNet (which uses a diagonal-plus-low-rank structure) and input-dependent block-diagonal linear RNNs, alongside introducing two novel variants based on sparsity and the Walsh–Hadamard transform. Unlike S4 and Mamba, which rely on diagonal state-transition matrices, SLiCEs with block-diagonal, sparse, or Walsh–Hadamard structures match the maximal expressivity of dense matrices while being significantly cheaper to compute.
+Structured Linear Controlled Differential Equations (SLiCEs) are a new class of sequence models that combine the maximal expressivity (i.e., universality) of dense, input-dependent, state-transition matrices with the computational efficiency of structured alternatives. The SLiCE framework generalises and extends architectures such as DeltaNet (which uses a diagonal-plus-low-rank structure) and input-dependent block-diagonal linear RNNs, alongside introducing two novel variants based on sparsity and the Walsh–Hadamard transform. Unlike S4 and Mamba, which rely on diagonal state-transition matrices, SLiCEs with block-diagonal, sparse, or Walsh–Hadamard structures match the maximal expressivity of dense matrices while being significantly cheaper to compute.
 
 **Highlights:**
 - ✅ Maximal expressivity without the cost of dense matrices  
 - ⚡ Parallel-in-time computation via associative scans  
 - 📉 20× faster per-step training compared to non-linear NCDEs on real-world time-series tasks  
 - 🧠 Best-in-class state-tracking performance among parallel models on regular language tasks  
+
+<p align="center">
+    <img class="center" src="./assets/formal_language_average_accuracy.png" width="800"/>
+</p>
 
 ## Contents
 
