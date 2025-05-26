@@ -145,13 +145,11 @@ If you use this work, please cite our preprint:
 
 ```bibtex
 @misc{walker2025slices,
-  title={Structured Linear Controlled Differential Equations: Maximally Expressive and Parallel-in-Time Sequence Models},
-  author={Walker, Benjamin C. and Yang, Lingyi and Muca Cirone, Nicola and Salvi, Cristopher and Lyons, Terry},
-  year={2025},
-  eprint={2505.XXXXX},
-  archivePrefix={arXiv},
-  primaryClass={cs.LG},
-  note={Preprint}
+  title        = {Structured Linear CDEs: Maximally Expressive and Parallel-in-Time Sequence Models},
+  author       = {Walker, Benjamin and Yang, Lingyi and Muca Cirone, Nicola and Salvi, Cristopher and Lyons, Terry},
+  year         = {2025},
+  month        = {May},
+  url          = {https://arxiv.org/abs/2505.17761},
 }
 ```
 
