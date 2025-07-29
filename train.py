@@ -13,6 +13,7 @@ import torch.optim as optim
 from data_dir.dataloaders import (
     create_a5_dataloaders,
     create_fl_dataloaders,
+    create_group_dataloaders,
 )
 from models.lr_scheduler import LinearWarmupCosineAnnealing
 
@@ -29,6 +30,16 @@ def set_seed(seed=42):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
+
+
+def vfA_l2(block):
+    lcde = block.LCDE
+    tensors = [lcde.vf_A.weight if isinstance(lcde.vf_A, nn.Linear) else lcde.vf_A]
+    for name in ("vf_A_u", "vf_A_v"):
+        t = getattr(lcde, name, None)
+        if t is not None:
+            tensors.append(t)
+    return torch.sqrt(sum((t**2).sum() for t in tensors))
 
 
 def train_model(
@@ -131,7 +142,7 @@ def train_model(
             norm = 0
             for block in model.blocks:
                 if hasattr(block, "LCDE"):
-                    norm += torch.sum(block.LCDE.vf_A**2) ** 0.5
+                    norm += vfA_l2(block)
 
             if task == "C4":
                 batch_size, seq_len, _ = outputs.shape
@@ -318,6 +329,35 @@ def run_experiment(config):
                     yield (X, X_2), (y, y_2), (mask, mask_2)
 
         dataloader = {"train": train_dataloader_multilength(), "val": val_dataloader}
+    
+    elif task == "A5_generalise":
+        train_padding_length = 128
+        if model_name == "lcde":
+            train_padding_length = 20
+        val_padding_length = 128
+        # Formal language tasks, e.g. "majority"
+        train_dataloader, _, data_dim, label_dim = create_group_dataloaders(
+            group="A5",
+            num_samples=25600000,
+            batch_size=batch_size,
+            min_length=3,
+            max_length=20,
+            padding_length=train_padding_length,
+            train_split=1.0,
+            seed=seed,
+        )
+        val_dataloader, _, _, _ = create_group_dataloaders(
+            group="A5",
+            num_samples=8192,
+            batch_size=batch_size,
+            min_length=20,
+            max_length=128,
+            padding_length=val_padding_length,
+            train_split=1.0,
+            seed=2 * seed,
+        )
+        dataloader = {"train": train_dataloader, "val": val_dataloader}
+
     else:
         train_padding_length = 256
         if model_name == "lcde":
