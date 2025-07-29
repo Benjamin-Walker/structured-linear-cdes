@@ -298,6 +298,8 @@ def run_experiment(config):
     slstm_at = config.get("slstm_at", [1])
     vf_A_norm_lambda = config.get("vf_A_norm_lambda", 0.001)
     rank = config.get("rank", 0)
+    d_state = config.get("d_state", 16)
+    dt_rank = config.get("dt_rank", "auto")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -399,6 +401,21 @@ def run_experiment(config):
             use_glu=use_glu,
             second_embedding=second_embedding,
         )
+    elif model_name == "S6":
+        from models.s6 import S6
+
+        model = S6(
+            num_blocks=num_blocks,
+            model_dim=model_dim,
+            data_dim=data_dim,
+            label_dim=label_dim,
+            dropout_rate=dropout_rate,
+            use_glu=use_glu,
+            second_embedding=second_embedding,
+            d_state=d_state,
+            dt_rank=dt_rank,
+        )
+
     elif model_name in ["deltanet", "gateddeltanet", "rwkv7", "rwkv6", "deltaproduct"]:
         from models.fla import StackedBlock
 
