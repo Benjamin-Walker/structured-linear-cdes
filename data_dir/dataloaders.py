@@ -4,14 +4,13 @@ from functools import reduce
 
 import pandas as pd
 import torch
-from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import DataLoader, Dataset, random_split
-
 from abstract_algebra.finite_algebras import (
     FiniteAlgebra,
     generate_cyclic_group,
     generate_symmetric_group,
 )
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import DataLoader, Dataset, random_split
 
 
 def generate_group(g: (str, int)) -> FiniteAlgebra:
@@ -190,8 +189,9 @@ class FormalLanguageDataset(Dataset):
 
 
 class GroupCompositionDataset(Dataset):
-    def __init__(self, group='A5', min_length=3, max_length=20, num_samples=1024, seed=1234):
-
+    def __init__(
+        self, group="A5", min_length=3, max_length=20, num_samples=1024, seed=1234
+    ):
         super().__init__()
         random.seed(seed)
         self.seeds = [random.randint(0, 2**32 - 1) for _ in range(num_samples)]
@@ -207,13 +207,10 @@ class GroupCompositionDataset(Dataset):
         self.data_dim = self.group_size
         self.label_dim = self.group_size
 
-
     def __len__(self):
         return self.num_samples
 
-
     def __getitem__(self, idx):
-
         rng = random.Random(self.seeds[idx])
         length = rng.randint(self.min_length, self.max_length)
 
@@ -344,7 +341,6 @@ def create_group_dataloaders(
     train_split: float = 0.8,
     seed: int = 1234,
 ):
-    
     dataset = GroupCompositionDataset(group, min_length, max_length, num_samples, seed)
 
     def col_fn(batch):
@@ -358,10 +354,28 @@ def create_group_dataloaders(
             [train_size, test_size],
             generator=torch.Generator().manual_seed(seed),
         )
-        train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=col_fn, num_workers=0)
-        test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, collate_fn=col_fn, num_workers=0)
+        train_loader = DataLoader(
+            train_set,
+            batch_size=batch_size,
+            shuffle=True,
+            collate_fn=col_fn,
+            num_workers=0,
+        )
+        test_loader = DataLoader(
+            test_set,
+            batch_size=batch_size,
+            shuffle=False,
+            collate_fn=col_fn,
+            num_workers=0,
+        )
     else:
-        train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=col_fn, num_workers=0)
+        train_loader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            collate_fn=col_fn,
+            num_workers=0,
+        )
         test_loader = None
 
     data_dim = len(dataset.group.elements)
