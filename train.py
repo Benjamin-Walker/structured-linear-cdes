@@ -31,6 +31,16 @@ def set_seed(seed=42):
     torch.backends.cudnn.deterministic = True
 
 
+def vfA_l2(block):
+    lcde = block.LCDE
+    tensors = [lcde.vf_A.weight if isinstance(lcde.vf_A, nn.Linear) else lcde.vf_A]
+    for name in ("vf_A_u", "vf_A_v"):
+        t = getattr(lcde, name, None)
+        if t is not None:
+            tensors.append(t)
+    return torch.sqrt(sum((t**2).sum() for t in tensors))
+
+
 def train_model(
     config,
     data_dim,
@@ -131,7 +141,7 @@ def train_model(
             norm = 0
             for block in model.blocks:
                 if hasattr(block, "LCDE"):
-                    norm += torch.sum(block.LCDE.vf_A**2) ** 0.5
+                    norm += vfA_l2(block)
 
             if task == "C4":
                 batch_size, seq_len, _ = outputs.shape
@@ -287,6 +297,8 @@ def run_experiment(config):
     slstm_at = config.get("slstm_at", [1])
     vf_A_norm_lambda = config.get("vf_A_norm_lambda", 0.001)
     rank = config.get("rank", 0)
+    d_state = config.get("d_state", 16)
+    dt_rank = config.get("dt_rank", "auto")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -359,6 +371,21 @@ def run_experiment(config):
             use_glu=use_glu,
             second_embedding=second_embedding,
         )
+    elif model_name == "S6":
+        from models.s6 import S6
+
+        model = S6(
+            num_blocks=num_blocks,
+            model_dim=model_dim,
+            data_dim=data_dim,
+            label_dim=label_dim,
+            dropout_rate=dropout_rate,
+            use_glu=use_glu,
+            second_embedding=second_embedding,
+            d_state=d_state,
+            dt_rank=dt_rank,
+        )
+
     elif model_name in ["deltanet", "gateddeltanet", "rwkv7", "rwkv6", "deltaproduct"]:
         from models.fla import StackedBlock
 
