@@ -9,8 +9,10 @@
   "learning_rate": 0.002,
   "early_stop_threshold": 0.9995,
   "block_size": 4,
+  "rank": 0,
   "init_std": 0.5,
   "diagonal": true,
+  "diagonal_dense": false,
   "fwht": false,
   "use_glu": false,
   "seed": 1234

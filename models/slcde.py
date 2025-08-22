@@ -54,6 +54,7 @@ class LinearCDE(nn.Module):
         block_size=1,
         dt=1.0 / 40,
         diagonal=False,
+        diagonal_dense=False,
         fwht=False,
         rank=0,
     ):
@@ -64,6 +65,8 @@ class LinearCDE(nn.Module):
         self.fwht = fwht
         self.dt = dt
         self.rank = rank
+        self.block_size = block_size
+        self.diagonal_dense = diagonal_dense
 
         if self.fwht:
             self.hadamard = hadamard_matrix(hidden_dim).to(torch.device("cuda")) / (
@@ -89,6 +92,14 @@ class LinearCDE(nn.Module):
                     torch.randn(input_dim + 1, hidden_dim * rank)
                     * (init_std / (rank**0.5))
                 )
+        elif diagonal_dense:
+            self.vf_A_diag = torch.nn.Parameter(
+                torch.randn(input_dim + 1, hidden_dim - block_size) * init_std
+            )
+            self.vf_A_dense = nn.Linear(
+                input_dim + 1, block_size * block_size, bias=False
+            )
+            nn.init.normal_(self.vf_A_dense.weight, mean=0.0, std=init_std)
         else:
             self.vf_A = nn.Linear(input_dim + 1, hidden_dim * hidden_dim, bias=False)
             nn.init.normal_(
@@ -103,7 +114,7 @@ class LinearCDE(nn.Module):
         self.register_buffer("mask", self._sparse_mask(sparsity))
 
         # Zero out certain weights according to mask (only once at init)
-        if not self.diagonal:
+        if not self.diagonal and not diagonal_dense:
             with torch.no_grad():
                 self.vf_A.weight *= self.mask
 
@@ -123,7 +134,7 @@ class LinearCDE(nn.Module):
         Applies the same mask to the gradients of vf_A.weight to keep them zero.
         This preserves the initially zeroed-out weights.
         """
-        if not self.diagonal:
+        if not self.diagonal and not self.diagonal_dense:
             if self.vf_A.weight.grad is not None:
                 self.vf_A.weight.grad *= self.mask
 
@@ -199,6 +210,19 @@ class LinearCDE(nn.Module):
                         ).view(-1, self.hidden_dim)
                     else:
                         state_transition = (inp[:, i] @ self.vf_A) * y
+            elif self.diagonal_dense:
+                y_diag = y[:, : -self.block_size]
+                y_dense = y[:, -self.block_size :]
+                diag_state_transition = (inp[:, i] @ self.vf_A_diag) * y_diag
+                A = self.vf_A_dense(inp[:, i])
+                dense_state_transition = torch.einsum(
+                    "bij,bj->bi",
+                    A.view(-1, self.block_size, self.block_size),
+                    y_dense,
+                )
+                state_transition = torch.concatenate(
+                    [diag_state_transition, dense_state_transition], dim=1
+                )
             else:
                 A = self.vf_A(inp[:, i])
                 state_transition = torch.einsum(
@@ -250,6 +274,7 @@ class LinearCDEBlock(nn.Module):
         block_size=1,
         use_glu: bool = False,
         diagonal=False,
+        diagonal_dense=False,
         fwht=False,
         rank=0,
     ):
@@ -261,6 +286,7 @@ class LinearCDEBlock(nn.Module):
             block_size=block_size,
             sparsity=sparsity,
             diagonal=diagonal,
+            diagonal_dense=diagonal_dense,
             fwht=fwht,
             rank=rank,
         )
@@ -350,6 +376,7 @@ class StackedLCDE(nn.Module):
         dropout_rate: float = 0.01,
         use_glu: bool = False,
         diagonal=False,
+        diagonal_dense=False,
         fwht=False,
         second_embedding=False,
         rank=0,
@@ -373,6 +400,7 @@ class StackedLCDE(nn.Module):
                     dropout_rate=dropout_rate,
                     use_glu=use_glu,
                     diagonal=diagonal,
+                    diagonal_dense=diagonal_dense,
                     fwht=fwht,
                     rank=rank,
                 )

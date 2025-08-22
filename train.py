@@ -34,11 +34,14 @@ def set_seed(seed=42):
 
 def vfA_l2(block):
     lcde = block.LCDE
-    tensors = [lcde.vf_A.weight if isinstance(lcde.vf_A, nn.Linear) else lcde.vf_A]
-    for name in ("vf_A_u", "vf_A_v"):
-        t = getattr(lcde, name, None)
-        if t is not None:
-            tensors.append(t)
+    if hasattr(lcde, "vf_A"):
+        tensors = [lcde.vf_A.weight if isinstance(lcde.vf_A, nn.Linear) else lcde.vf_A]
+        for name in ("vf_A_u", "vf_A_v"):
+            t = getattr(lcde, name, None)
+            if t is not None:
+                tensors.append(t)
+    else:
+        tensors = [lcde.vf_A_diag, lcde.vf_A_dense.weight]
     return torch.sqrt(sum((t**2).sum() for t in tensors))
 
 
@@ -140,9 +143,10 @@ def train_model(
             outputs = model(X)
             # Norm
             norm = 0
-            for block in model.blocks:
-                if hasattr(block, "LCDE"):
-                    norm += vfA_l2(block)
+            if hasattr(model, "blocks"):
+                for block in model.blocks:
+                    if hasattr(block, "LCDE"):
+                        norm += vfA_l2(block)
 
             if task == "C4":
                 batch_size, seq_len, _ = outputs.shape
@@ -235,7 +239,7 @@ def train_model(
 
                 out_filename = f"results_{task}_{model_name}_{time_str}.json"
 
-                out_path = os.path.join("results", out_filename)
+                out_path = os.path.join("result", out_filename)
 
                 # Gather all relevant info to save:
                 results_dict = {
@@ -285,6 +289,7 @@ def run_experiment(config):
 
     # Optional fields
     diagonal = config.get("diagonal", False)
+    diagonal_dense = config.get("diagonal_dense", False)
     fwht = config.get("fwht", False)
     use_glu = config.get("use_glu", False)
     second_embedding = config.get("second_embedding", False)
@@ -337,13 +342,12 @@ def run_experiment(config):
         if model_name == "lcde":
             train_padding_length = 20
         val_padding_length = 128
-        # Formal language tasks, e.g. "majority"
         train_dataloader, _, data_dim, label_dim = create_group_dataloaders(
             group="A5",
             num_samples=25600000,
             batch_size=batch_size,
             min_length=3,
-            max_length=20,
+            max_length=40,
             padding_length=train_padding_length,
             train_split=1.0,
             seed=seed,
@@ -352,7 +356,7 @@ def run_experiment(config):
             group="A5",
             num_samples=8192,
             batch_size=batch_size,
-            min_length=20,
+            min_length=40,
             max_length=128,
             padding_length=val_padding_length,
             train_split=1.0,
@@ -459,6 +463,7 @@ def run_experiment(config):
             dropout_rate=dropout_rate,
             use_glu=use_glu,
             diagonal=diagonal,
+            diagonal_dense=diagonal_dense,
             fwht=fwht,
             second_embedding=second_embedding,
             rank=rank,
