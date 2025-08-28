@@ -42,7 +42,7 @@ def vfA_l2(block):
                 tensors.append(t)
     else:
         tensors = [lcde.vf_A_diag, lcde.vf_A_dense.weight]
-    return torch.sqrt(sum((t**2).sum() for t in tensors))
+    return sum((t**2).sum() ** 0.5 for t in tensors)
 
 
 def train_model(
@@ -239,7 +239,7 @@ def train_model(
 
                 out_filename = f"results_{task}_{model_name}_{time_str}.json"
 
-                out_path = os.path.join("result", out_filename)
+                out_path = os.path.join("results", out_filename)
 
                 # Gather all relevant info to save:
                 results_dict = {
