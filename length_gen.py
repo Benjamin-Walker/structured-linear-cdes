@@ -3,7 +3,6 @@ import os
 
 import torch
 
-# We assume you need this to generate data for your task:
 from data_dir.dataloaders import create_group_dataloaders
 
 
@@ -24,10 +23,25 @@ def build_model(model_name, config, data_dim, label_dim, device):
             use_glu=config.get("use_glu", False),
             second_embedding=config.get("second_embedding", False),
         )
-    elif model_name == "transformer":
-        from models.transformer import Transformer
+    elif model_name == "s6":
+        from models.s6 import S6
 
-        model = Transformer(
+        model = S6(
+            num_blocks=config["num_blocks"],
+            model_dim=config["model_dim"],
+            data_dim=data_dim,
+            label_dim=label_dim,
+            dropout_rate=config.get("dropout_rate", 0.01),
+            use_glu=config.get("use_glu", False),
+            second_embedding=config.get("second_embedding", False),
+            d_state=config.get("d_state", 16),
+            dt_rank=config.get("dt_rank", "auto"),
+        )
+
+    elif model_name == "transformer":
+        from models.transformer import CausalTransformer
+
+        model = CausalTransformer(
             num_blocks=config["num_blocks"],
             model_dim=config["model_dim"],
             data_dim=data_dim,
@@ -36,7 +50,7 @@ def build_model(model_name, config, data_dim, label_dim, device):
             second_embedding=config.get("second_embedding", False),
         )
 
-    elif model_name in ["deltanet", "gateddeltanet", "rwkv6", "rwkv7"]:
+    elif model_name in ["deltanet", "gateddeltanet", "deltaproduct", "rwkv6", "rwkv7"]:
         from models.fla import StackedBlock
 
         model = StackedBlock(
@@ -45,6 +59,8 @@ def build_model(model_name, config, data_dim, label_dim, device):
             model_dim=config["model_dim"],
             data_dim=data_dim,
             label_dim=label_dim,
+            rank=config.get("rank", 0),
+            gated=config.get("gated", True),
             dropout_rate=config.get("dropout_rate", 0.01),
             use_glu=config.get("use_glu", False),
             second_embedding=config.get("second_embedding", False),
@@ -103,6 +119,7 @@ def build_model(model_name, config, data_dim, label_dim, device):
             data_dim=data_dim,
             model_dim=config["model_dim"],
             label_dim=label_dim,
+            slstm_at=config.get("slstm_at", [1]),
             dropout_rate=config.get("dropout_rate", 0.01),
             second_embedding=config.get("second_embedding", False),
             context_length=config.get("padding_length", 256),
@@ -177,11 +194,13 @@ def main():
         required=True,
         choices=[
             "xlstm",
+            "s6",
             "mamba",
             "lstm",
             "deltanet",
             "deltanet2",
             "gateddeltanet",
+            "deltaproduct",
             "rwkv6",
             "rwkv7",
             "lcde",
