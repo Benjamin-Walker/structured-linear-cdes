@@ -405,10 +405,11 @@ def run_experiment(config):
             use_glu=use_glu,
             second_embedding=second_embedding,
         )
-    elif model_name == "S6":
-        from models.s6 import S6
+    elif model_name in ["S4", "S6"]:
+        from models.ssm import SSM
 
-        model = S6(
+        model = SSM(
+            recurrence_type=model_name,
             num_blocks=num_blocks,
             model_dim=model_dim,
             data_dim=data_dim,

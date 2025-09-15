@@ -6,6 +6,78 @@ from einops import rearrange, repeat
 from mamba_ssm.ops.selective_scan_interface import selective_scan_fn
 
 
+class S4Recurrence(nn.Module):
+    """
+    Real S4D-style recurrence compatible with selective_scan_fn.
+    """
+
+    def __init__(
+        self,
+        d_model,
+        d_state=16,
+        dt_rank="auto",  # kept for API symmetry; unused here
+        dt_min=0.001,
+        dt_max=0.1,
+        dt_init_floor=1e-4,
+        device=None,
+    ):
+        super().__init__()
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
+
+        self.d_model = d_model
+        self.d_state = d_state
+        self.dt_rank = math.ceil(self.d_model / 16) if dt_rank == "auto" else dt_rank
+
+        dt = torch.exp(
+            torch.rand(self.d_model, device=self.device)
+            * (math.log(dt_max) - math.log(dt_min))
+            + math.log(dt_min)
+        ).clamp(min=dt_init_floor)
+        self.log_dt = nn.Parameter(torch.log(dt))
+
+        # S4D real initialization
+        A = repeat(
+            torch.arange(1, self.d_state + 1, dtype=torch.float32, device=self.device),
+            "n -> d n",
+            d=self.d_model,
+        ).contiguous()
+        self.A_log = nn.Parameter(torch.log(A))
+
+        self.B = nn.Parameter(
+            torch.empty(self.d_model, self.d_state, device=self.device)
+        )
+        self.C = nn.Parameter(
+            torch.empty(self.d_model, self.d_state, device=self.device)
+        )
+        nn.init.xavier_normal_(self.B)
+        nn.init.xavier_normal_(self.C)
+        self.D = nn.Parameter(torch.ones(self.d_model, device=self.device))
+
+    def forward(self, hidden_states):
+        # x: (B, L, D) -> (B, D, L)
+        x = rearrange(hidden_states, "b l d -> b d l").contiguous()
+
+        A = -torch.exp(self.A_log.float())
+        dt = self.log_dt.exp()[None, :, None].expand(
+            x.shape[0], self.d_model, x.shape[2]
+        )
+        y = selective_scan_fn(
+            x,
+            dt,
+            A,
+            self.B.float(),
+            self.C.float(),
+            self.D.float(),
+            z=None,
+            delta_softplus=False,
+            return_last_state=False,
+        )
+        return rearrange(y, "b d l -> b l d")
+
+
 class MambaRecurrence(nn.Module):
     """
     Implements the Mamba recurrence layer for sequence modeling.
@@ -113,13 +185,13 @@ class MambaRecurrence(nn.Module):
         """
         batch, seqlen, dim = hidden_states.shape
         A = -torch.exp(self.A_log.float())  # (d_inner, d_state)
-        x = rearrange(hidden_states, "b l d -> b d l")
+        x = rearrange(hidden_states, "b l d -> b d l").contiguous()
         x_dbl = self.x_proj(rearrange(x, "b d l -> (b l) d"))  # (bl d)
         dt, B, C = torch.split(
             x_dbl, [self.dt_rank, self.d_state, self.d_state], dim=-1
         )
         dt = self.dt_proj.weight @ dt.t()
-        dt = rearrange(dt, "d (b l) -> b d l", l=seqlen)
+        dt = rearrange(dt, "d (b l) -> b d l", l=seqlen).contiguous()
         B = rearrange(B, "(b l) dstate -> b dstate l", l=seqlen).contiguous()
         C = rearrange(C, "(b l) dstate -> b dstate l", l=seqlen).contiguous()
         y = selective_scan_fn(
@@ -137,9 +209,10 @@ class MambaRecurrence(nn.Module):
         return rearrange(y, "b d l -> b l d")
 
 
-class S6(nn.Module):
+class SSM(nn.Module):
     def __init__(
         self,
+        recurrence_type: str,
         num_blocks: int,
         data_dim: int,
         model_dim: int,
@@ -162,9 +235,16 @@ class S6(nn.Module):
         if second_embedding:
             self.embedding2 = nn.Embedding(data_dim, emb_dim)
 
+        if recurrence_type == "S6":
+            recurrence_cls = MambaRecurrence
+        elif recurrence_type == "S4":
+            recurrence_cls = S4Recurrence
+        else:
+            raise ValueError(f"Unknown recurrence type: {recurrence_type}")
+
         self.blocks = nn.ModuleList(
             [
-                MambaRecurrence(model_dim, d_state=d_state, dt_rank=dt_rank)
+                recurrence_cls(model_dim, d_state=d_state, dt_rank=dt_rank)
                 for _ in range(num_blocks)
             ]
         )
