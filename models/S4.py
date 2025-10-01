@@ -123,7 +123,8 @@ class S4D(nn.Module):
 
     def forward(self, u, **kwargs):  # absorbs return_output and transformer src mask
         """Input and output shape (B, H, L)"""
-        u = u.transpose(-1, -2)
+        if not self.transposed:
+            u = u.transpose(-1, -2)
         L = u.size(-1)
 
         # Compute SSM Kernel
@@ -163,14 +164,12 @@ class S4Block(nn.Module):
         self, model_dim: int, dropout_rate: float = 0.1, use_glu: bool = False
     ):
         super().__init__()
-        self.s4 = S4D(d_model=model_dim)
+        self.s4d = S4D(d_model=model_dim, transposed=False)
         self.norm = nn.LayerNorm(model_dim)
         self.drop = nn.Dropout(p=dropout_rate)
 
         self.use_glu = use_glu
         if self.use_glu:
-            # The linear expands from model_dim to 2*model_dim
-            # so that GLU can split it into two halves of model_dim each
             self.post_linear = nn.Linear(model_dim, 2 * model_dim)
         else:
             self.post_linear = None
@@ -187,8 +186,7 @@ class S4Block(nn.Module):
         """
 
         # S4 module
-        y = self.s4(x)
-        y = y.transpose(1, 2)  # (batch_size, model_dim, seq_len)
+        y = self.s4d(x)
         y = y + x
 
         # Optional: Linear -> GLU
