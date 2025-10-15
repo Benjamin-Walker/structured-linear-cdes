@@ -178,14 +178,16 @@ class LinearCDE(nn.Module):
             if self.diagonal:
                 if self.rank > 0:
                     diag = (inp[:, i] @ self.vf_A) * y
-                    U = (inp[:, i] @ self.vf_A_u).reshape(
-                        -1, self.hidden_dim, self.rank
-                    )
-                    V = (inp[:, i] @ self.vf_A_v).reshape(
-                        -1, self.hidden_dim, self.rank
-                    )
-                    z = torch.bmm(V.transpose(1, 2), y.unsqueeze(-1)).squeeze(-1)
-                    state_transition = diag + torch.bmm(U, z.unsqueeze(-1)).squeeze(-1)
+                    U = self.vf_A_u.view(
+                        self.input_dim + 1, self.hidden_dim, self.rank
+                    )  # (C, H, R)
+                    V = self.vf_A_v.view(
+                        self.input_dim + 1, self.hidden_dim, self.rank
+                    )  # (C, H, R)
+                    vTy = (V.unsqueeze(0) * y.unsqueeze(1).unsqueeze(-1)).sum(dim=2)
+                    vTy = inp[:, i].unsqueeze(-1) * vTy
+                    lowrank = (U.unsqueeze(0) * vTy.unsqueeze(2)).sum(dim=(1, 3))
+                    state_transition = diag + lowrank
                 elif self.fwht:
                     state_transition = (inp[:, i] @ torch.tanh(self.vf_A)) * y
                     state_transition = hadamard_transform(
