@@ -118,6 +118,7 @@ def train_model(
     criterion = nn.CrossEntropyLoss()
     step = 0
     total_loss = 0
+    best_val_acc = 0
     steps = []
     val_accs = []
     start_time = time.time()
@@ -232,8 +233,10 @@ def train_model(
 
                 checkpoint_filename = f"checkpoint_{task}_{model_name}_{time_str}.pt"
                 checkpoint_path = os.path.join("checkpoints", checkpoint_filename)
-                torch.save(checkpoint, checkpoint_path)
-                print(f"Saved model checkpoint to: {checkpoint_path}")
+                if accuracy > best_val_acc:
+                    best_val_acc = accuracy
+                    torch.save(checkpoint, checkpoint_path)
+                    print(f"Saved model checkpoint to: {checkpoint_path}")
 
                 early_stop = accuracy > early_stop_threshold
 
@@ -336,9 +339,15 @@ def run_experiment(config):
         dataloader = {"train": train_dataloader_multilength(), "val": val_dataloader}
 
     elif task == "A5_generalise":
-        train_padding_length = 128
-        if model_name == "lcde":
-            train_padding_length = 20
+        if model_name[:8] == "deltanet" or model_name == "deltaproduct":
+            train_padding_length = 65
+        elif model_name == "xlstm":
+            if slstm_at == []:
+                train_padding_length = 128
+            else:
+                train_padding_length = 40
+        else:
+            train_padding_length = 40
         val_padding_length = 128
         train_dataloader, _, data_dim, label_dim = create_group_dataloaders(
             group="A5",
@@ -360,6 +369,7 @@ def run_experiment(config):
             train_split=1.0,
             seed=2 * seed,
         )
+
         dataloader = {"train": train_dataloader, "val": val_dataloader}
 
     else:

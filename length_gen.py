@@ -94,6 +94,7 @@ def build_model(model_name, config, data_dim, label_dim, device):
             dropout_rate=config.get("dropout_rate", 0.01),
             use_glu=config.get("use_glu", False),
             diagonal=config.get("diagonal", False),
+            diagonal_dense=config.get("diagonal_dense", False),
             fwht=config.get("fwht", False),
             second_embedding=config.get("second_embedding", False),
             rank=config.get("rank", 0),
