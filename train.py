@@ -341,11 +341,6 @@ def run_experiment(config):
     elif task == "A5_generalise":
         if model_name[:8] == "deltanet" or model_name == "deltaproduct":
             train_padding_length = 65
-        elif model_name == "xlstm":
-            if slstm_at == []:
-                train_padding_length = 128
-            else:
-                train_padding_length = 40
         else:
             train_padding_length = 40
         val_padding_length = 128
