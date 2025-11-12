@@ -118,6 +118,16 @@ conda install pytorch=2.2 pytorch-cuda=12.1 numpy=1.26.4 pandas=2.2.3 -c pytorch
 pip install https://github.com/Dao-AILab/fast-hadamard-transform/releases/download/v1.0.4.post1/fast_hadamard_transform-1.0.4.post1+cu122torch2.2cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 ```
 
+### The A5 Benchmark
+
+The length generalisation task on the A5 benchmark uses Jackson Petty's fork of Al Reich's [Abstract Algebra repo](https://github.com/alreich/abstract_algebra). The package needs to be installed from source:
+
+```bash
+git clone git@github.com:jopetty/abstract_algebra.git
+cd abstract_algebra
+pip install .
+```
+
 ### Flash-linear-attention
 
 The models **DeltaNet**, **Gated DeltaNet**, **DeltaProduct**, and **RWKV-7** are implemented in the [`flash-linear-attention`](https://github.com/fla-org/flash-linear-attention) package.
