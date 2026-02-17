@@ -1,6 +1,20 @@
 <h1 align="center">Structured Linear Controlled Differential Equations: Maximally Expressive and Parallel-in-Time Sequence Models</h1>
 <h2 align="center"><em>Don't be Dense, SLiCE the Cost!</em></h2>
 
+## New SLiCEs Repository
+
+The actively maintained SLiCEs codebase now lives at [datasig-ac-uk/SLiCEs](https://github.com/datasig-ac-uk/SLiCEs). For new projects, this is the recommended repository.
+
+Compared to this repository, the new codebase is designed as a standalone package with cleaner installation and usage for modern workflows:
+
+- 🏛️ Official maintained implementation
+- ✅ Pip-installable package support
+- ⚡ Parallel-in-time SLiCE implementations
+
+Use this repository primarily for reproducing the original experiments described in the paper.
+
+## Introduction
+
 Structured Linear Controlled Differential Equations (SLiCEs) are a new class of sequence models that combine the maximal expressivity (i.e., universality) of dense, input-dependent, state-transition matrices with the computational efficiency of structured alternatives. The SLiCE framework generalises and extends architectures such as DeltaNet (which uses a diagonal-plus-low-rank structure) and input-dependent block-diagonal linear RNNs, alongside introducing two novel variants based on sparsity and the Walsh–Hadamard transform. Unlike S4 and Mamba, which rely on diagonal state-transition matrices, SLiCEs with block-diagonal, sparse, or Walsh–Hadamard structures match the maximal expressivity of dense matrices while being significantly cheaper to compute.
 
 **Highlights:**
@@ -63,10 +77,11 @@ Below is a comparison of dense LNCDEs (DE-LNCDEs), diagonal LNCDEs (D-LNCDEs), d
 | BD-LNCDEs   | \$\mathcal{O}(d\_h \sum\_j b\_j^2)\$ | \$\mathcal{O}(n d\_h \sum\_j b\_j^2)\$ | \$\mathcal{O}(\log(n), d\_h \sum\_j b\_j^2)\$ | Yes       |
 
 
-
 ## Using this Repository
 
-This repository provides scripts to reproduce the $A_5$ and regular language experiments from the paper. Results on the UEA multivariate time series classification archive are implemented in the [Log-NCDE github repo](https://github.com/Benjamin-Walker/log-neural-cdes).  All experiments in this repo are configured using JSON files in the `experiment_configs/` directory.
+This repository provides scripts to reproduce the original $A_5$ and regular language experiments from the paper. Results on the UEA multivariate time series classification archive are implemented in the [Log-NCDE github repo](https://github.com/Benjamin-Walker/log-neural-cdes).
+
+If you are looking for the current, pip-installable SLiCEs implementation, use [datasig-ac-uk/SLiCEs](https://github.com/datasig-ac-uk/SLiCEs). All experiments in this repo are configured using JSON files in the `experiment_configs/` directory.
 
 For example, to run a block-diagonal LNCDE on the cycle navigation task, use the following configuration:
 
